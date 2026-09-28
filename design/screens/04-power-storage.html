@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Power &amp; Storage</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+  .ups { width: 452px; }
+  .ups .body { display: flex; align-items: center; gap: 22px; flex: 1; margin-top: 6px; }
+  .ringw { position: relative; width: 136px; height: 136px; flex: none; }
+  .ringw .c { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .ringw .c .num { font-size: 40px; }
+  .ringw .c .caption { font-size: 14px; letter-spacing: .08em; text-transform: uppercase; margin-top: 2px; }
+  .stat .label { margin-bottom: 4px; }
+  .nas { width: 468px; }
+  .nas .big { display: flex; align-items: baseline; gap: 14px; margin-top: 8px; }
+  .disks { display: flex; gap: 8px; margin-top: auto; }
+  .disk { flex: 1; background: var(--surface-2); border-radius: 6px; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 10px; }
+  .disk .nm { font-size: 15px; font-weight: 700; color: var(--ink-2); letter-spacing: .06em; }
+  .disk .num { font-size: 22px; margin-left: auto; }
+  .disk[data-status="warn"] { background: var(--warn-bg); box-shadow: inset 0 0 0 2px var(--warn); }
+  .disk[data-status="crit"] { background: var(--crit-bg); box-shadow: inset 0 0 0 2px var(--crit); }
+  .bk { flex: 1; }
+  .bk .it { display: flex; align-items: center; gap: 10px; flex: 1; border-top: 2px solid var(--line); }
+  .bk .it:first-child { border-top: 0; }
+  .bk .it .nm { font-size: 19px; font-weight: 500; }
+  .bk .it .num { font-size: 26px; margin-left: auto; }
+</style>
+</head>
+<body data-screen="power" data-status="ok">
+<aside class="rail">
+  <div class="rail-title">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+    <h1>Power</h1>
+  </div>
+  <div><div class="clock" data-clock></div><div class="date" data-date></div></div>
+  <div class="badge" data-badge></div>
+  <div class="dots" data-dots="7" data-on="4"></div>
+</aside>
+
+<main class="stage">
+  <!-- APC Smart-UPS X 3000 -->
+  <section class="tile ups">
+    <div class="row c" style="justify-content:space-between">
+      <div class="label">UPS · Smart-UPS X 3000</div>
+      <span class="pill" data-bind="ups.on_battery" data-fmt="none" data-crit=">0"><i class="st"></i><span data-bind="ups.state"></span></span>
+    </div>
+    <div class="body">
+      <div class="ringw">
+        <svg width="136" height="136" data-chart="ring" data-bind="ups.battery_pct" data-color="--ok" data-thick="14" data-warn="<50" data-crit="<25"></svg>
+        <div class="c"><div class="num" data-bind="ups.battery_pct" data-fmt="pct"></div><div class="caption">battery</div></div>
+      </div>
+      <div class="col" style="gap:14px; flex:1">
+        <div class="stat">
+          <div class="label">Runtime</div>
+          <div class="num lg" data-bind="ups.runtime_s" data-fmt="dur"></div>
+        </div>
+        <div class="stat">
+          <div class="label">Load&nbsp;<span class="dim" style="text-transform:none;letter-spacing:.02em">≈ <span data-bind="ups.load_w" data-fmt="int"></span> W</span></div>
+          <div class="row c" style="gap:12px">
+            <div class="num md" data-bind="ups.load_pct" data-fmt="pct"></div>
+            <div class="meter grow" data-bind="ups.load_pct" data-warn=">70" data-crit=">90"><i></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Synology -->
+  <section class="tile nas">
+    <div class="row c" style="justify-content:space-between">
+      <div class="label">NAS · DS-HomeNAS · Volume 1</div>
+      <div class="label muted"><i class="st" data-bind="nas.raid_status" data-fmt="none" data-crit=">1"></i>RAID <span data-bind="nas.raid_text"></span></div>
+    </div>
+    <div class="big">
+      <div class="num xl" data-bind="nas.volume_used_pct" data-fmt="pct"></div>
+      <div class="sub">used · <b style="color:var(--ink)" data-bind="nas.volume_free_tb" data-fmt="tb"></b> free of <span data-bind="nas.volume_total_tb" data-fmt="tb"></span></div>
+    </div>
+    <div class="meter fat" style="margin-top:8px" data-bind="nas.volume_used_pct" data-warn=">90" data-crit=">95"><i></i></div>
+    <div class="disks" data-list="nas.disks">
+      <template>
+        <div class="disk" data-attr-data-status=".status">
+          <i class="st"></i><span class="nm" data-bind=".name"></span>
+          <span class="num" data-bind=".temp_c" data-fmt="temp"></span>
+        </div>
+      </template>
+    </div>
+  </section>
+
+  <!-- Backups (kube cronjobs matching .*backup.*) -->
+  <section class="tile bk">
+    <div class="label">Backups · last success</div>
+    <div class="col" style="flex:1; margin-top:2px" data-list="backups" data-max-items="4">
+      <template>
+        <div class="it">
+          <i class="st" data-bind=".age_s" data-fmt="none" data-warn=">93600" data-crit=">172800"></i>
+          <span class="nm ell" data-bind=".name"></span>
+          <span class="num" data-bind=".age_s" data-fmt="age"></span>
+        </div>
+      </template>
+    </div>
+  </section>
+</main>
+
+<script type="application/json" id="data">
+{
+  "clock": { "time": "21:04", "date": "Sun 27 Sep" },
+  "alerts": { "critical": 0, "warning": 0 },
+  "ups": { "battery_pct": 100, "load_pct": 23, "load_w": 621, "runtime_s": 2520, "on_battery": 0, "state": "On line" },
+  "nas": {
+    "volume_used_pct": 72.1, "volume_free_tb": 12.2, "volume_total_tb": 43.6, "raid_status": 1, "raid_text": "normal",
+    "disks": [
+      { "name": "D1", "temp_c": 36, "status": "ok" },
+      { "name": "D2", "temp_c": 37, "status": "ok" },
+      { "name": "D3", "temp_c": 39, "status": "ok" },
+      { "name": "D4", "temp_c": 36, "status": "ok" }
+    ]
+  },
+  "backups": [
+    { "name": "postgres-cluster", "age_s": 11200 },
+    { "name": "immich-db", "age_s": 18400 },
+    { "name": "home-assistant", "age_s": 40100 },
+    { "name": "etcd-snapshot", "age_s": 82800 }
+  ]
+}
+</script>
+<script src="../display.js"></script>
+</body>
+</html>

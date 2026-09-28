@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Media</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+  .streams { width: 196px; justify-content: space-between; }
+  .streams .mix { display: flex; flex-direction: column; gap: 4px; }
+  .streams .mix .sub { display: flex; align-items: center; gap: 8px; }
+  .streams .mix b { font-family: var(--f-num); font-size: 22px; color: var(--ink); min-width: 14px; }
+
+  .playing { flex: 1; display: flex; gap: var(--gap); min-width: 0; }
+  .card { flex: 1 1 0; min-width: 0; background: var(--surface); border-radius: var(--radius);
+          padding: 12px 16px 12px 22px; position: relative; display: flex; flex-direction: column; overflow: hidden; }
+  .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--c-3); }
+  .card[data-mode="transcode"]::before { background: var(--c-4); }
+  .card .pill.tc { display: none; }
+  .card[data-mode="transcode"] .pill.dp { display: none; }
+  .card[data-mode="transcode"] .pill.tc { display: inline-flex; }
+  .card .tc-detail { display: none; }
+  .card[data-mode="transcode"] .tc-detail { display: block; }
+  .card .title { font-family: var(--f-num); font-weight: 700; font-size: 38px; line-height: 1; margin-top: 10px; }
+  .card .ep { font-size: 20px; color: var(--ink-2); margin-top: 4px; }
+  .card .who { margin-top: auto; display: flex; align-items: baseline; gap: 8px; font-size: 20px; white-space: nowrap; overflow: hidden; }
+  .card .who b { font-weight: 700; }
+  .card .who span { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
+  .tc-detail { font-size: 15px; color: var(--ink-3); margin-top: 4px; white-space: nowrap; }
+
+  .idle { display: none; flex: 1; background: var(--surface); border-radius: var(--radius); align-items: center; gap: 28px; padding: 0 36px; }
+  .playing:not(:has(.card)) .idle { display: flex; }
+  .idle svg { width: 96px; height: 96px; color: var(--line-2); flex: none; }
+  .idle .big { font-family: var(--f-num); font-weight: 700; font-size: 52px; color: var(--ink-2); line-height: 1; }
+  .lib { width: 250px; }
+  .lib .g { display: grid; grid-template-columns: 1fr 1fr; row-gap: 10px; column-gap: 12px; margin-top: 10px; }
+  .lib .g .num { font-size: 36px; }
+</style>
+</head>
+<body data-screen="media" data-status="ok">
+<aside class="rail">
+  <div class="rail-title">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M10 8.5v7l6-3.5z" fill="currentColor"/></svg>
+    <h1>Media</h1>
+  </div>
+  <div><div class="clock" data-clock></div><div class="date" data-date></div></div>
+  <div class="badge" data-badge></div>
+  <div class="dots" data-dots="7" data-on="3"></div>
+</aside>
+
+<main class="stage">
+  <section class="tile streams">
+    <div class="label"><i class="st" data-bind="jellyfin.up" data-fmt="none" data-crit="<1"></i>Now playing</div>
+    <div class="num hero" data-bind="jellyfin.streams"></div>
+    <div class="mix">
+      <div class="sub"><i class="sw c3"></i><b data-bind="jellyfin.direct"></b>direct</div>
+      <div class="sub"><i class="sw c4"></i><b data-bind="jellyfin.transcodes"></b>transcode</div>
+    </div>
+  </section>
+
+  <div class="playing" data-list="jellyfin.sessions" data-max-items="3">
+    <div class="idle">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M10 8.5v7l6-3.5z"/></svg>
+      <div>
+        <div class="big">Nothing playing</div>
+        <div class="sub" style="margin-top:10px"><span data-bind="jellyfin.library.movie" data-fmt="int"></span> movies and <span data-bind="jellyfin.library.episode" data-fmt="int"></span> episodes ready to watch</div>
+      </div>
+    </div>
+    <template>
+      <article class="card" data-attr-data-mode=".mode">
+        <div class="row c">
+          <span class="pill c3 dp">Direct play</span>
+          <span class="pill c4 tc">Transcode · <span data-bind=".hw"></span></span>
+        </div>
+        <div class="title ell" data-bind=".title"></div>
+        <div class="ep ell" data-bind=".subtitle"></div>
+        <div class="who"><b data-bind=".user"></b><span data-bind=".device"></span></div>
+        <div class="tc-detail"><span data-bind=".codec"></span> · <span data-bind=".bitrate_bps" data-fmt="bps"></span></div>
+      </article>
+    </template>
+  </div>
+
+  <section class="tile lib">
+    <div class="label">Library</div>
+    <div class="g">
+      <div><div class="num" data-bind="jellyfin.library.movie" data-fmt="int"></div><div class="caption">movies</div></div>
+      <div><div class="num" data-bind="jellyfin.library.series" data-fmt="int"></div><div class="caption">series</div></div>
+      <div><div class="num" data-bind="jellyfin.library.episode" data-fmt="int"></div><div class="caption">episodes</div></div>
+      <div><div class="num" data-bind="jellyfin.library.album" data-fmt="int"></div><div class="caption">albums</div></div>
+    </div>
+  </section>
+</main>
+
+<script type="application/json" id="data">
+{
+  "clock": { "time": "21:04", "date": "Sun 27 Sep" },
+  "alerts": { "critical": 0, "warning": 0 },
+  "jellyfin": {
+    "up": 1, "streams": 2, "direct": 1, "transcodes": 1, "users_active": 2,
+    "sessions": [
+      { "mode": "direct", "title": "Severance", "subtitle": "S2 · E5 — Trojan's Horse", "user": "derek", "device": "Living Room · Shield TV" },
+      { "mode": "transcode", "title": "Dune: Part Two", "subtitle": "Movie · 2024", "user": "emma", "device": "iPad (Safari)",
+        "hw": "VAAPI", "codec": "HEVC → H.264 · AAC", "bitrate_bps": 8200000 }
+    ],
+    "library": { "movie": 1284, "series": 212, "episode": 9847, "album": 604, "song": 7912 }
+  }
+}
+</script>
+<script src="../display.js"></script>
+</body>
+</html>

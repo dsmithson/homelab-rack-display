@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cluster</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+  .ready { width: 196px; justify-content: space-between; }
+  .heat { flex: 1; padding: 10px 14px 12px; }
+  .groups { display: grid; grid-template-columns: 64px 4fr 4fr 1fr; column-gap: 8px; height: 22px; }
+  .groups div { font-size: 14px; font-weight: 700; letter-spacing: .1em; color: var(--ink-3); text-transform: uppercase;
+                border-bottom: 2px solid var(--line-2); margin-right: 2px; white-space: nowrap; overflow: hidden; }
+  .grid { display: grid; grid-template-columns: 64px repeat(9, 1fr); column-gap: 8px; flex: 1; margin-top: 6px; }
+  .grid .rh, .grid .node { display: grid; grid-template-rows: 24px 1fr 1fr 1fr; row-gap: 5px; }
+  .grid .rh div { font-size: 15px; font-weight: 700; letter-spacing: .08em; color: var(--ink-2); display: flex; align-items: center; }
+  .node .nm { font-family: var(--f-num); font-weight: 700; font-size: 20px; display: flex; align-items: center; gap: 6px; }
+  .node .nm .st { width: 10px; height: 10px; }
+  .cell { background: var(--surface-2); border-radius: 6px; padding: 4px 8px 6px; display: flex; flex-direction: column; justify-content: space-between; }
+  .cell .num { font-size: 28px; }
+  .cell .num .unit { font-size: .6em; }
+  .cell[data-status="warn"] { background: var(--warn-bg); box-shadow: inset 0 0 0 2px var(--warn); }
+  .cell[data-status="crit"] { background: var(--crit-bg); box-shadow: inset 0 0 0 2px var(--crit); }
+  .pods { width: 300px; }
+  .pods .it { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-top: 2px solid var(--line); }
+  .pods .it:first-child { border-top: 0; }
+  .pods .it .st { margin-top: 5px; }
+  .pods .t { font-size: 20px; font-weight: 700; }
+</style>
+</head>
+<body data-screen="cluster" data-status="warn">
+<aside class="rail">
+  <div class="rail-title">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="5" rx="1.5"/><rect x="3" y="10" width="18" height="5" rx="1.5"/><rect x="3" y="17" width="18" height="4" rx="1.5"/><path d="M7 5.5h.01M7 12.5h.01"/></svg>
+    <h1>Cluster</h1>
+  </div>
+  <div><div class="clock" data-clock></div><div class="date" data-date></div></div>
+  <div class="badge" data-badge></div>
+  <div class="dots" data-dots="7" data-on="2"></div>
+</aside>
+
+<main class="stage">
+  <section class="tile ready">
+    <div class="label">Nodes ready</div>
+    <div class="num hero"><span data-bind="cluster.nodes_ready"></span><span class="unit" style="font-size:.5em">/<span data-bind="cluster.nodes_total"></span></span></div>
+    <div class="sub"><b class="num sm" data-bind="cluster.pods_running" data-fmt="int"></b> pods running</div>
+  </section>
+
+  <section class="tile heat">
+    <div class="groups"><span></span><div>turing01</div><div>turing02</div><div>media</div></div>
+    <div class="grid" data-list="nodes">
+      <div class="rh"><span></span><div>CPU</div><div>MEM</div><div>°C</div></div>
+      <template>
+        <div class="node">
+          <div class="nm"><i class="st" data-bind=".ready" data-fmt="none" data-crit="<1"></i><span data-bind=".short"></span></div>
+          <div class="cell"><div class="num" data-bind=".cpu_pct" data-fmt="pct" data-warn=">85" data-crit=">95" data-status-on=".cell"></div>
+            <div class="meter thin" data-bind=".cpu_pct" data-warn=">85" data-crit=">95"><i></i></div></div>
+          <div class="cell"><div class="num" data-bind=".mem_pct" data-fmt="pct" data-warn=">85" data-crit=">95" data-status-on=".cell"></div>
+            <div class="meter thin" data-bind=".mem_pct" data-warn=">85" data-crit=">95"><i></i></div></div>
+          <div class="cell"><div class="num" data-bind=".temp_c" data-fmt="temp" data-nounit data-warn=">70" data-crit=">80" data-status-on=".cell"></div>
+            <div class="meter thin" data-bind=".temp_c" data-warn=">70" data-crit=">80"><i></i></div></div>
+        </div>
+      </template>
+    </div>
+  </section>
+
+  <section class="tile pods">
+    <div class="label">Pod problems&nbsp;<b style="color:var(--ink)" data-bind="cluster.pod_problems"></b></div>
+    <div class="col" data-list="cluster.problems" data-max-items="3" style="margin-top:4px">
+      <template>
+        <div class="it">
+          <i class="st" data-bind=".sev" data-fmt="none" data-warn=">0" data-crit=">1"></i>
+          <div class="grow">
+            <div class="t ell" data-bind=".name"></div>
+            <div class="caption" data-bind=".detail"></div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </section>
+</main>
+
+<script type="application/json" id="data">
+{
+  "clock": { "time": "21:04", "date": "Sun 27 Sep" },
+  "alerts": { "critical": 0, "warning": 0 },
+  "cluster": {
+    "nodes_ready": 9, "nodes_total": 9, "pods_running": 187, "pod_problems": 2,
+    "problems": [
+      { "name": "immich-machine-learning", "detail": "CrashLoopBackOff · immich", "sev": 2 },
+      { "name": "radarr", "detail": "Degraded 0/1 available · media", "sev": 1 }
+    ]
+  },
+  "nodes": [
+    { "short": "01", "node": "turing01-01", "ready": 1, "cpu_pct": 34, "mem_pct": 61, "temp_c": 52 },
+    { "short": "02", "node": "turing01-02", "ready": 1, "cpu_pct": 22, "mem_pct": 48, "temp_c": 49 },
+    { "short": "03", "node": "turing01-03", "ready": 1, "cpu_pct": 81, "mem_pct": 74, "temp_c": 73 },
+    { "short": "04", "node": "turing01-04", "ready": 1, "cpu_pct": 18, "mem_pct": 55, "temp_c": 48 },
+    { "short": "01", "node": "turing02-01", "ready": 1, "cpu_pct": 27, "mem_pct": 66, "temp_c": 51 },
+    { "short": "02", "node": "turing02-02", "ready": 1, "cpu_pct": 41, "mem_pct": 88, "temp_c": 55 },
+    { "short": "03", "node": "turing02-03", "ready": 1, "cpu_pct": 12, "mem_pct": 39, "temp_c": 47 },
+    { "short": "04", "node": "turing02-04", "ready": 1, "cpu_pct": 30, "mem_pct": 57, "temp_c": 50 },
+    { "short": "M1", "node": "ds-k8s-media-01", "ready": 1, "cpu_pct": 46, "mem_pct": 42, "temp_c": 58 }
+  ]
+}
+</script>
+<script src="../display.js"></script>
+</body>
+</html>

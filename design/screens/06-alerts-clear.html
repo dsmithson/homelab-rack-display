@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Alerts</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+  .clear { flex: 1; flex-direction: row; align-items: center; gap: 32px; padding: 0 40px; }
+  .clear .ico { width: 132px; height: 132px; flex: none; }
+  .clear .big { font-family: var(--f-num); font-weight: 700; font-size: 92px; line-height: .9; letter-spacing: .01em; }
+  .counts { display: flex; gap: 12px; }
+  .count { width: 170px; justify-content: center; }
+  .count .num { color: var(--ink-3); }
+</style>
+</head>
+<body data-screen="alerts" data-status="ok">
+<aside class="rail">
+  <div class="rail-title">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 8 2.5 8h-17S6 15 6 9z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>
+    <h1>Alerts</h1>
+  </div>
+  <div><div class="clock" data-clock></div><div class="date" data-date></div></div>
+  <div class="badge" data-badge></div>
+  <div class="dots" data-dots="7" data-on="6"></div>
+</aside>
+
+<main class="stage">
+  <section class="tile clear">
+    <svg class="ico" viewBox="0 0 132 132">
+      <circle cx="66" cy="66" r="58" fill="none" stroke="var(--ok)" stroke-width="10"/>
+      <path d="M40 68 58 86 94 48" fill="none" stroke="var(--ok)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div>
+      <div class="big">ALL CLEAR</div>
+      <div class="sub" style="font-size:22px; margin-top:12px">No alerts firing · <span data-bind="alerts.rules_total"></span> rules watching</div>
+    </div>
+  </section>
+  <div class="counts">
+    <section class="tile count"><div class="label">Critical</div><div class="num xl" data-bind="alerts.critical"></div></section>
+    <section class="tile count"><div class="label">Warning</div><div class="num xl" data-bind="alerts.warning"></div></section>
+  </div>
+</main>
+
+<script type="application/json" id="data">
+{
+  "clock": { "time": "21:04", "date": "Sun 27 Sep" },
+  "alerts": { "critical": 0, "warning": 0, "rules_total": 39, "firing": [] }
+}
+</script>
+<script src="../display.js"></script>
+</body>
+</html>

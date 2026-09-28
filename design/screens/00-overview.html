@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Overview</title>
+<link rel="stylesheet" href="../tokens.css">
+<style>
+  .stage { gap: 10px; }
+  .ov { flex: 1 1 0; padding: 12px 14px 12px; }
+  .ov .num { font-size: 56px; margin-top: 8px; }
+  .ov .num .unit { font-size: .38em; }
+  .ov .sub { font-size: 17px; margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+  .ov .foot { margin-top: auto; }
+  .ov .meter { height: 12px; }
+</style>
+</head>
+<body data-screen="overview" data-status="warn">
+<aside class="rail">
+  <div class="rail-title">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+    <h1>Homelab</h1>
+  </div>
+  <div><div class="clock" data-clock></div><div class="date" data-date></div></div>
+  <div class="badge" data-badge></div>
+  <div class="dots" data-dots="7" data-on="0"></div>
+</aside>
+
+<main class="stage">
+  <section class="tile ov">
+    <div class="label"><i class="st" data-bind="wan.loss_pct_max" data-fmt="none" data-warn=">1" data-crit=">5"></i>Internet</div>
+    <div class="num" data-bind="wan.down_bps" data-fmt="bps"></div>
+    <div class="sub">↑ <span data-bind="wan.up_bps" data-fmt="bps"></span> up</div>
+    <svg class="foot" width="136" height="40" data-chart="spark" data-bind="wan.down_mbps_1h" data-color="--c-1" data-fill="1" data-min="0"></svg>
+  </section>
+
+  <section class="tile ov" data-bind="cluster.pod_problems" data-fmt="none" data-warn=">0">
+    <div class="label"><i class="st" data-bind="cluster.nodes_notready" data-fmt="none" data-crit=">0"></i>Cluster</div>
+    <div class="num"><span data-bind="cluster.nodes_ready"></span><span class="unit">/ <span data-bind="cluster.nodes_total"></span> ready</span></div>
+    <div class="sub"><i class="st" style="width:12px;height:12px" data-bind="cluster.pod_problems" data-fmt="none" data-warn=">0"></i><span data-bind="cluster.pod_problems"></span> pod problems</div>
+    <div class="foot"><div class="caption" style="margin-bottom:5px">avg CPU <span data-bind="cluster.cpu_avg_pct" data-fmt="pct"></span></div>
+      <div class="meter" data-bind="cluster.cpu_avg_pct" data-warn=">85" data-crit=">95"><i></i></div></div>
+  </section>
+
+  <section class="tile ov">
+    <div class="label"><i class="st" data-bind="jellyfin.up" data-fmt="none" data-crit="<1"></i>Media</div>
+    <div class="num"><span data-bind="jellyfin.streams"></span><span class="unit">streams</span></div>
+    <div class="sub"><i class="sw c4"></i><span data-bind="jellyfin.transcodes"></span> transcoding</div>
+    <div class="foot" data-list="jellyfin.sessions" data-max-items="2">
+      <template><div class="caption ell"><span data-bind=".user"></span> · <span data-bind=".title"></span></div></template>
+    </div>
+  </section>
+
+  <section class="tile ov">
+    <div class="label"><i class="st" data-bind="ups.on_battery" data-fmt="none" data-crit=">0"></i>UPS</div>
+    <div class="num" data-bind="ups.battery_pct" data-fmt="pct"></div>
+    <div class="sub"><span data-bind="ups.runtime_s" data-fmt="dur"></span> runtime</div>
+    <div class="foot"><div class="caption" style="margin-bottom:5px">load <span data-bind="ups.load_pct" data-fmt="pct"></span></div>
+      <div class="meter" data-bind="ups.load_pct" data-warn=">70" data-crit=">90"><i></i></div></div>
+  </section>
+
+  <section class="tile ov">
+    <div class="label"><i class="st" data-bind="nas.volume_used_pct" data-fmt="none" data-warn=">90" data-crit=">95"></i>NAS</div>
+    <div class="num"><span data-bind="nas.volume_used_pct" data-fmt="pct"></span></div>
+    <div class="sub"><span data-bind="nas.volume_free_tb" data-fmt="tb"></span> free</div>
+    <div class="foot"><div class="caption" style="margin-bottom:5px">volume 1 used</div>
+      <div class="meter" data-bind="nas.volume_used_pct" data-warn=">90" data-crit=">95"><i></i></div></div>
+  </section>
+
+  <section class="tile ov">
+    <div class="label"><i class="st" data-bind="dns.instances_up" data-fmt="none" data-warn="<2" data-crit="<1"></i>DNS</div>
+    <div class="num" data-bind="dns.blocked_pct" data-fmt="pct1"></div>
+    <div class="sub">blocked of <span data-bind="dns.queries" data-fmt="compact"></span></div>
+    <svg class="foot" width="136" height="40" data-chart="bars" data-bind="dns.queries_24h" data-color="--c-1"></svg>
+  </section>
+
+  <section class="tile ov">
+    <div class="label"><i class="st ok"></i>LAN</div>
+    <div class="num" data-bind="lan.in_bps" data-fmt="bps"></div>
+    <div class="sub"><span data-bind="lan.ports_up"></span> / <span data-bind="lan.ports_total"></span> ports up</div>
+    <svg class="foot" width="136" height="40" data-chart="spark" data-bind="lan.in_mbps_1h" data-color="--c-1" data-fill="1" data-min="0"></svg>
+  </section>
+</main>
+
+<script type="application/json" id="data">
+{
+  "clock": { "time": "21:04", "date": "Sun 27 Sep" },
+  "alerts": { "critical": 0, "warning": 0 },
+  "wan": { "down_bps": 842300000, "up_bps": 38400000, "loss_pct_max": 0,
+    "down_mbps_1h": [39,32.9,21.3,21.9,44.8,44.5,894.5,867.3,828.6,854.6,830.7,842.3] },
+  "cluster": { "nodes_ready": 9, "nodes_total": 9, "nodes_notready": 0, "pod_problems": 2, "cpu_avg_pct": 35 },
+  "jellyfin": { "up": 1, "streams": 2, "transcodes": 1,
+    "sessions": [ { "user": "derek", "title": "Severance" }, { "user": "emma", "title": "Dune: Part Two" } ] },
+  "ups": { "battery_pct": 100, "load_pct": 23, "runtime_s": 2520, "on_battery": 0 },
+  "nas": { "volume_used_pct": 72.1, "volume_free_tb": 12.2 },
+  "dns": { "instances_up": 2, "blocked_pct": 14.8, "queries": 48213,
+    "queries_24h": [15293,16114,17040,19588,21369,24577,28237,32684,36031,38496,42040,41897,42157,41531,42639,40520,35149,33948,28977,25607,23747,20510,15925,17465] },
+  "lan": { "in_bps": 2638000000, "ports_up": 18, "ports_total": 28,
+    "in_mbps_1h": [1783,1614,1933,1936,1926,2062,2015,1986,1878,1841,1837,1694,1630,1812,1543,1569,1498,1282,1383,1453,1379,1418,1402,2269,2061,2238,2404,2594,2618,2838,2638] }
+}
+</script>
+<script src="../display.js"></script>
+</body>
+</html>
