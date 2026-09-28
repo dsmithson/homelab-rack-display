@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels: {{- include "rack-display.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # Only one process can be DRM master on the panel; never overlap pods.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {{- include "rack-display.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "rack-display.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ .Values.config | sha256sum }}
+    spec:
+      {{- if .Values.panel.enabled }}
+      nodeSelector:
+        kubernetes.io/hostname: {{ .Values.panel.node }}
+      {{- end }}
+      containers:
+        - name: rack-display
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- if .Values.config }}
+            - -config=/config/display.json
+            {{- end }}
+            {{- if .Values.panel.enabled }}
+            - -panel={{ .Values.panel.device }}
+            {{- else }}
+            - -panel=none
+            {{- end }}
+            - -interval={{ .Values.panel.captureInterval }}
+          env:
+            - name: TZ
+              value: {{ .Values.timezone | quote }}
+            {{- with .Values.grafana.existingSecret }}
+            - name: GRAFANA_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . }}
+                  key: {{ $.Values.grafana.existingSecretKey }}
+                  optional: true
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          {{- if .Values.panel.enabled }}
+          securityContext:
+            # DRM master + mode-setting on the udl card needs device access
+            # that only a privileged container gets without a device plugin.
+            privileged: true
+          {{- end }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: shm
+              mountPath: /dev/shm
+            {{- if .Values.panel.enabled }}
+            - name: dri
+              mountPath: /dev/dri
+            {{- end }}
+            {{- if .Values.config }}
+            - name: config
+              mountPath: /config
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: shm
+          emptyDir: { medium: Memory, sizeLimit: 256Mi }
+        {{- if .Values.panel.enabled }}
+        - name: dri
+          hostPath: { path: /dev/dri, type: Directory }
+        {{- end }}
+        {{- if .Values.config }}
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-config
+        {{- end }}

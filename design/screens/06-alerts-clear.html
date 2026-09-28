@@ -25,7 +25,7 @@
 </aside>
 
 <main class="stage">
-  <section class="tile clear">
+  <section class="tile clear" data-unless="alerts.unavailable">
     <svg class="ico" viewBox="0 0 132 132">
       <circle cx="66" cy="66" r="58" fill="none" stroke="var(--ok)" stroke-width="10"/>
       <path d="M40 68 58 86 94 48" fill="none" stroke="var(--ok)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
@@ -35,7 +35,17 @@
       <div class="sub" style="font-size:22px; margin-top:12px">No alerts firing · <span data-bind="alerts.rules_total"></span> rules watching</div>
     </div>
   </section>
-  <div class="counts">
+  <section class="tile clear" data-if="alerts.unavailable">
+    <svg class="ico" viewBox="0 0 132 132">
+      <circle cx="66" cy="66" r="58" fill="none" stroke="var(--ink-3)" stroke-width="10"/>
+      <path d="M66 36v38M66 92v4" fill="none" stroke="var(--ink-3)" stroke-width="12" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <div class="big" style="color:var(--ink-2)">NO ALERT DATA</div>
+      <div class="sub" style="font-size:22px; margin-top:12px">Grafana alert API unreachable · check the display's service-account token</div>
+    </div>
+  </section>
+  <div class="counts" data-unless="alerts.unavailable">
     <section class="tile count"><div class="label">Critical</div><div class="num xl" data-bind="alerts.critical"></div></section>
     <section class="tile count"><div class="label">Warning</div><div class="num xl" data-bind="alerts.warning"></div></section>
   </div>

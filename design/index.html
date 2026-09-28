@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rack Display</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #stage { position: absolute; left: 0; top: 0; width: 1440px; height: 240px; transform-origin: 0 0; }
+  iframe { position: absolute; inset: 0; width: 1440px; height: 240px; border: 0; visibility: hidden; }
+  iframe.on { visibility: visible; }
+</style>
+</head>
+<body>
+<div id="stage"><iframe id="a" title="screen"></iframe><iframe id="b" title="screen"></iframe></div>
+<script>
+/* Rotator: asks the server for the current playlist (which already accounts
+   for variants such as "nothing playing" and critical-alert interleaving),
+   preloads each screen into the hidden iframe, then swaps. The panel
+   renderer loads this page with ?panel (exact 1440x240, no scaling); in a
+   normal browser it scales to fit the window. */
+(function () {
+  const params = new URLSearchParams(location.search);
+  const panel = params.has("panel");
+  const stage = document.getElementById("stage");
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function fit() {
+    if (panel) return;
+    const s = Math.min(innerWidth / 1440, innerHeight / 240);
+    stage.style.transform = `scale(${s})`;
+    stage.style.left = (innerWidth - 1440 * s) / 2 + "px";
+    stage.style.top = (innerHeight - 240 * s) / 2 + "px";
+  }
+  addEventListener("resize", fit);
+  fit();
+
+  let front = document.getElementById("a"), back = document.getElementById("b");
+  const load = (f, src) => new Promise((res) => {
+    const t = setTimeout(res, 5000);
+    f.onload = () => { clearTimeout(t); res(); };
+    f.src = src;
+  });
+
+  // ?screen=02-cluster pins one screen (still refreshed every dwell).
+  const pin = params.get("screen");
+
+  (async function loop() {
+    for (;;) {
+      let slots;
+      try {
+        const r = await fetch("/api/playlist" + (pin ? "?screen=" + encodeURIComponent(pin) : ""), { cache: "no-store" });
+        slots = (await r.json()).slots;
+      } catch (e) {
+        await sleep(5000);
+        continue;
+      }
+      for (const s of slots) {
+        await load(back, s.url);
+        await sleep(150); // let fonts and layout settle before showing
+        back.classList.add("on");
+        front.classList.remove("on");
+        [front, back] = [back, front];
+        await sleep(s.dwell_ms);
+      }
+    }
+  })();
+})();
+</script>
+</body>
+</html>

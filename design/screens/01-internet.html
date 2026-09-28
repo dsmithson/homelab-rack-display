@@ -13,6 +13,8 @@
   .ping .r:first-of-type { border-top: 0; }
   .ping .name { font-size: 18px; font-weight: 500; }
   .ping .loss { font-size: 15px; color: var(--ink-3); margin-top: 2px; }
+  .st-v { color: var(--ink-2); font-weight: 600; }
+  .st-v .unit { font-size: inherit; color: inherit; margin-left: 1px; }
 </style>
 </head>
 <body data-screen="internet" data-status="ok">
@@ -42,12 +44,12 @@
   <!-- 6 h throughput; dashed line = last speedtest (measured capacity) -->
   <section class="tile chart">
     <div class="head">
-      <div class="label">WAN throughput · last 6 h</div>
-      <div class="label muted">Speedtest <span data-bind="speedtest.age_s" data-fmt="ago" style="text-transform:none"></span></div>
+      <div class="label">WAN · last 6 h</div>
+      <div class="label muted" style="text-transform:none">SPEEDTEST <b class="st-v" data-bind="speedtest.down_bps" data-fmt="bps"></b> · <b class="st-v" data-bind="speedtest.ping_ms" data-nounit data-fmt="ms"></b> ms ±<b class="st-v" data-bind="speedtest.jitter_ms" data-nounit data-fmt="ms"></b> · <span data-bind="speedtest.age_s" data-fmt="ago"></span></div>
     </div>
     <svg width="612" height="150" data-chart="area"
          data-bind="wan.down_mbps_6h,wan.up_mbps_6h" data-colors="--c-1,--c-2" data-fills="1,0"
-         data-max="1000" data-grid="250,500,750,1000" data-axis-w="44"
+         data-max="auto" data-axis-w="44"
          data-xlabels="−6h,−5h,−4h,−3h,−2h,−1h,now"
          data-ref="speedtest.down_mbps" data-ref-label="speedtest {v} Mb/s"></svg>
   </section>

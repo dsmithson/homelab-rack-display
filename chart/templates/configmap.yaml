@@ -1,0 +1,10 @@
+{{- if .Values.config }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  labels: {{- include "rack-display.labels" . | nindent 4 }}
+data:
+  display.json: |
+{{ .Values.config | indent 4 }}
+{{- end }}

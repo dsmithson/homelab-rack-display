@@ -197,3 +197,21 @@ WAN interface is `ix0_vlan100` today. It will change when WAN moves to a dedicat
 * Fixed SVG widths assume this layout. If a tile's width changes, update that `<svg width>` too.
 * Motion (later): at 5 fps, the only motion worth adding is a slow rotation-progress fill on the active
   dot, and perhaps the chart's live dot pulsing. Avoid anything larger, because it will judder over DisplayLink.
+
+---
+
+## Live wiring (added when the app was built)
+
+- The Go server (`cmd/rack-display`) replaces each screen's
+  `<script id="data">` with the live data document when serving
+  `/screens/<name>.html`; opening a screen as a file still uses its mock data.
+- The binding → PromQL mapping now lives in **`config/display.json`**, which is
+  the source of truth (the table above documents the original intent).
+- **Thresholds** are configured in `config/display.json` under `thresholds`
+  (e.g. `"nodes.temp_c": {"warn": ">70", "crit": ">80"}`); the `data-warn` /
+  `data-crit` attributes in the HTML remain as defaults.
+- New runtime features in `display.js`: `?live=N` self-refresh,
+  `data-if` / `data-unless`, `data-max="auto"` area charts, rotation dots from
+  the server's playlist, a ticking clock, and "–" for missing values.
+- `index.html` is the rotator (double-buffered iframes); the panel renderer
+  screenshots `/?panel`.

@@ -1,0 +1,48 @@
+image:
+  repository: dsmithson/rack-display
+  tag: "latest"
+  # latest is mutable, so always pull (same reasoning as azure-build-monitor).
+  pullPolicy: Always
+
+# Timezone for the on-screen clock.
+timezone: America/Phoenix
+
+panel:
+  # Drive the physical DisplayLink panel. Requires the udl kernel module on
+  # the node and a privileged pod (DRM master on /dev/dri/cardN).
+  enabled: true
+  # "auto" finds the udl/evdi card; or an explicit /dev/dri/cardN.
+  device: auto
+  # Node the panel is plugged into.
+  node: turing01-04
+  captureInterval: 1s
+
+grafana:
+  # Secret holding a Grafana service-account token (Viewer) for alert state.
+  # Without it the display runs and shows "ALERTS N/A".
+  #   kubectl create secret generic rack-display-grafana -n rack-display \
+  #     --from-literal=GRAFANA_TOKEN=<token>
+  existingSecret: rack-display-grafana
+  existingSecretKey: GRAFANA_TOKEN
+
+# Full display.json to override the one baked into the image. Leave empty to
+# use the image default (config/display.json in the app repo).
+config: ""
+
+service:
+  port: 80
+
+ingress:
+  enabled: true
+  className: public
+  host: rackdisplay.int.knightware.net
+  tlsSecret: wildcard-int-knightware-net-tls
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi

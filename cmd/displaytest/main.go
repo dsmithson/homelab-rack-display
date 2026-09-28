@@ -6,15 +6,19 @@
 //	displaytest -out /dev/dri/card6    # specific DRM card
 //	displaytest -out /dev/fb1          # legacy fbdev fallback
 //	displaytest -out preview.png       # render one frame to a PNG
+//	displaytest -url http://host/frame.png   # mirror a remote rack-display
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"image"
 	"image/draw"
 	"image/png"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -42,6 +46,7 @@ func main() {
 	duration := flag.Duration("duration", 0, "exit after this long (0 = until Ctrl-C)")
 	images := flag.String("images", "", "directory of PNGs to show as a slideshow instead of the test pattern")
 	dwell := flag.Duration("dwell", 8*time.Second, "time per image in -images mode")
+	frameURL := flag.String("url", "", "poll this PNG URL (e.g. rack-display /frame.png) and mirror it")
 	flag.Parse()
 
 	if *list {
@@ -96,6 +101,13 @@ func main() {
 	}
 	tick := time.NewTicker(time.Duration(float64(time.Second) / *fps))
 	defer tick.Stop()
+
+	if *frameURL != "" {
+		if err := mirror(dev, *frameURL, time.Duration(float64(time.Second) / *fps), sig, deadline); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	if *images != "" {
 		if err := slideshow(dev, *images, *dwell, sig, deadline); err != nil {
@@ -182,6 +194,40 @@ func slideshow(dev output, dir string, dwell time.Duration, sig <-chan os.Signal
 		log.Printf("showing %s", filepath.Base(paths[i]))
 		select {
 		case <-time.After(dwell):
+		case <-sig:
+			return nil
+		case <-deadline:
+			return nil
+		}
+	}
+}
+
+// mirror polls a PNG URL and shows it whenever it changes.
+func mirror(dev output, url string, every time.Duration, sig <-chan os.Signal, deadline <-chan time.Time) error {
+	img := image.NewRGBA(dev.Bounds())
+	var last []byte
+	hc := &http.Client{Timeout: 5 * time.Second}
+	for n := 0; ; {
+		if resp, err := hc.Get(url); err != nil {
+			log.Printf("fetch: %v", err)
+		} else {
+			b, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK && !bytes.Equal(b, last) {
+				if src, err := png.Decode(bytes.NewReader(b)); err == nil {
+					last = b
+					draw.Draw(img, img.Bounds(), src, src.Bounds().Min, draw.Src)
+					if err := dev.Show(img); err != nil {
+						return err
+					}
+					if n++; n%30 == 1 {
+						log.Printf("frame %d", n)
+					}
+				}
+			}
+		}
+		select {
+		case <-time.After(every):
 		case <-sig:
 			return nil
 		case <-deadline:

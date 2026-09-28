@@ -120,6 +120,7 @@ body[data-status="crit"] .rail { --stripe: var(--crit); }
 .badge .n { display: inline-flex; align-items: center; gap: 4px; }
 .badge.firing { background: var(--crit-solid); }
 .badge.warning { background: var(--warn-bg); }
+.badge.unknown { background: var(--surface-2); color: var(--ink-3); }
 
 .dots { display: flex; gap: 6px; align-items: center; height: 8px; }
 .dots i { width: 8px; height: 8px; border-radius: 4px; background: var(--line-2); }

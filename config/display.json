@@ -1,0 +1,193 @@
+{
+  "prometheus": { "url": "http://kube-prometheus-stack-prometheus.monitoring.svc:9090" },
+  "grafana": { "url": "http://kube-prometheus-stack-grafana.monitoring.svc", "token_env": "GRAFANA_TOKEN" },
+  "refresh": "15s",
+
+  "rotation": [
+    { "screen": "00-overview",      "dwell": "12s" },
+    { "screen": "01-internet",      "dwell": "15s" },
+    { "screen": "02-cluster",       "dwell": "15s" },
+    { "screen": "03-media",         "dwell": "12s",
+      "variants": [ { "when": "jellyfin.streams == 0", "screen": "03b-media-idle", "dwell": "8s" } ] },
+    { "screen": "04-power-storage", "dwell": "12s" },
+    { "screen": "05-dns-network",   "dwell": "12s" },
+    { "screen": "06-alerts-clear",  "dwell": "10s",
+      "variants": [ { "when": "alerts.critical > 0 || alerts.warning > 0", "screen": "06b-alerts-firing" } ] }
+  ],
+  "priority": { "when": "alerts.critical > 0", "screen": "06b-alerts-firing", "dwell": "20s" },
+
+  "thresholds": {
+    "wan.loss_pct_max":      { "warn": ">1",  "crit": ">5" },
+    "ping.loss_pct":         { "warn": ">1",  "crit": ">5" },
+    "cluster.cpu_avg_pct":   { "warn": ">85", "crit": ">95" },
+    "cluster.nodes_notready":{ "crit": ">0" },
+    "cluster.pod_problems":  { "warn": ">0" },
+    "cluster.problems.sev":  { "warn": ">0",  "crit": ">1" },
+    "nodes.ready":           { "crit": "<1" },
+    "nodes.cpu_pct":         { "warn": ">85", "crit": ">95" },
+    "nodes.mem_pct":         { "warn": ">85", "crit": ">95" },
+    "nodes.temp_c":          { "warn": ">70", "crit": ">80" },
+    "jellyfin.up":           { "crit": "<1" },
+    "ups.on_battery":        { "crit": ">0" },
+    "ups.battery_pct":       { "warn": "<50", "crit": "<25" },
+    "ups.load_pct":          { "warn": ">70", "crit": ">90" },
+    "nas.raid_status":       { "crit": ">1" },
+    "nas.volume_used_pct":   { "warn": ">90", "crit": ">95" },
+    "backups.age_s":         { "warn": ">93600", "crit": ">172800" },
+    "dns.instances_up":      { "warn": "<2",  "crit": "<1" },
+    "alerts.critical":       { "crit": ">0" },
+    "alerts.warning":        { "warn": ">0" }
+  },
+
+  "data": {
+    "alerts": { "grafana_alerts": { "max_firing": 4 } },
+
+    "wan.down_bps":     { "query": "sum(rate(node_network_receive_bytes_total{instance=\"opnsense-01\",device=\"ix0_vlan100\"}[2m])) * 8" },
+    "wan.up_bps":       { "query": "sum(rate(node_network_transmit_bytes_total{instance=\"opnsense-01\",device=\"ix0_vlan100\"}[2m])) * 8" },
+    "wan.down_mbps_6h": { "query": "sum(rate(node_network_receive_bytes_total{instance=\"opnsense-01\",device=\"ix0_vlan100\"}[5m])) * 8 / 1e6", "range": "6h", "step": "5m", "round": 1 },
+    "wan.up_mbps_6h":   { "query": "sum(rate(node_network_transmit_bytes_total{instance=\"opnsense-01\",device=\"ix0_vlan100\"}[5m])) * 8 / 1e6", "range": "6h", "step": "5m", "round": 1 },
+    "wan.down_mbps_1h": { "query": "sum(rate(node_network_receive_bytes_total{instance=\"opnsense-01\",device=\"ix0_vlan100\"}[5m])) * 8 / 1e6", "range": "1h", "step": "5m", "round": 1 },
+    "wan.loss_pct_max": { "query": "max(100 * (1 - avg_over_time(probe_success{job=\"blackbox-icmp\"}[5m])))", "round": 1, "default": 0 },
+
+    "speedtest.down_bps":  { "query": "max(last_over_time(speedtest_download_bits_per_second[24h]))" },
+    "speedtest.up_bps":    { "query": "max(last_over_time(speedtest_upload_bits_per_second[24h]))" },
+    "speedtest.down_mbps": { "query": "max(last_over_time(speedtest_download_bits_per_second[24h])) / 1e6", "round": 0 },
+    "speedtest.ping_ms":   { "query": "max(last_over_time(speedtest_ping_latency_milliseconds[24h]))", "round": 1 },
+    "speedtest.jitter_ms": { "query": "max(last_over_time(speedtest_jitter_latency_milliseconds[24h]))", "round": 1 },
+    "speedtest.age_s":     { "query": "time() - max(max_over_time(timestamp(speedtest_download_bits_per_second)[24h:1m]))", "round": 0 },
+
+    "ping": { "table": {
+      "query": "avg_over_time(probe_duration_seconds{job=\"blackbox-icmp\"}[5m]) * 1000",
+      "key": ["target_name"],
+      "columns": {
+        "target":   { "label": "target_name" },
+        "rtt_ms":   { "round": 1 },
+        "loss_pct": { "query": "100 * (1 - avg_over_time(probe_success{job=\"blackbox-icmp\"}[5m]))", "round": 1, "default": 0 }
+      },
+      "sort_by": "target", "limit": 3 } },
+
+    "cluster.nodes_ready":    { "query": "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})" },
+    "cluster.nodes_total":    { "query": "count(kube_node_info)" },
+    "cluster.nodes_notready": { "query": "count(kube_node_info) - sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})" },
+    "cluster.pods_running":   { "query": "sum(kube_pod_status_phase{phase=\"Running\"})" },
+    "cluster.cpu_avg_pct":    { "query": "100 - avg(rate(node_cpu_seconds_total{job=\"node-exporter\",mode=\"idle\"}[5m])) * 100", "round": 0 },
+    "cluster.pod_problems":   { "query": "count(count by (name) (label_replace(max by (namespace, pod, container) (kube_pod_container_status_waiting_reason{reason=\"CrashLoopBackOff\"}) == 1, \"name\", \"$1\", \"container\", \"(.*)\") or label_replace((kube_deployment_spec_replicas - kube_deployment_status_replicas_available) > 0, \"name\", \"$1\", \"deployment\", \"(.*)\"))) or vector(0)" },
+    "cluster.problems": { "tables": [
+      { "query": "max by (namespace, pod, container) (kube_pod_container_status_waiting_reason{reason=\"CrashLoopBackOff\"}) == 1",
+        "key": ["namespace", "pod"],
+        "columns": {
+          "name":   { "label": "container" },
+          "detail": { "template": "CrashLoopBackOff · {namespace}" },
+          "sev":    { "const": 2 } },
+        "sort_by": "sev", "desc": true, "limit": 3, "dedupe": "name" },
+      { "query": "(kube_deployment_spec_replicas - kube_deployment_status_replicas_available) > 0",
+        "key": ["namespace", "deployment"],
+        "columns": {
+          "name":   { "label": "deployment" },
+          "avail":  { "query": "kube_deployment_status_replicas_available", "default": 0 },
+          "spec":   { "query": "kube_deployment_spec_replicas", "default": 0 },
+          "detail": { "template": "Degraded {avail}/{spec} available · {namespace}" },
+          "sev":    { "const": 1 } } }
+    ] },
+
+    "nodes": { "table": {
+      "query": "label_replace(kube_node_info, \"nodename\", \"$1\", \"node\", \"(.*)\")",
+      "key": ["nodename"],
+      "columns": {
+        "node":    { "label": "nodename" },
+        "short":   { "label": "nodename", "regex": "^turing0\\d-(\\d+)$", "replace": "$1", "map": { "ds-k8s-media-01": "M1" } },
+        "ready":   { "query": "label_replace(kube_node_status_condition{condition=\"Ready\",status=\"true\"}, \"nodename\", \"$1\", \"node\", \"(.*)\")", "default": 0 },
+        "cpu_pct": { "query": "(1 - avg by (nodename) (rate(node_cpu_seconds_total{job=\"node-exporter\",mode=\"idle\"}[5m]) * on (instance) group_left (nodename) node_uname_info{job=\"node-exporter\"})) * 100", "round": 0, "default": null },
+        "mem_pct": { "query": "max by (nodename) ((1 - node_memory_MemAvailable_bytes{job=\"node-exporter\"} / node_memory_MemTotal_bytes{job=\"node-exporter\"}) * 100 * on (instance) group_left (nodename) node_uname_info{job=\"node-exporter\"})", "round": 0, "default": null },
+        "temp_c":  { "query": "max by (nodename) (node_thermal_zone_temp{job=\"node-exporter\"} * on (instance) group_left (nodename) node_uname_info{job=\"node-exporter\"}) or max by (nodename) (node_hwmon_temp_celsius{job=\"node-exporter\",chip=~\"platform_coretemp.*\"} * on (instance) group_left (nodename) node_uname_info{job=\"node-exporter\"})", "round": 0, "default": null }
+      },
+      "order": ["turing01-01", "turing01-02", "turing01-03", "turing01-04", "turing02-01", "turing02-02", "turing02-03", "turing02-04", "ds-k8s-media-01"] } },
+
+    "jellyfin.up":           { "query": "max(jellyfin_up{job=\"jellyfin-exporter\"})", "default": 0 },
+    "jellyfin.streams":      { "query": "count(max without (instance, pod, endpoint, container) (jellyfin_now_playing_state{job=\"jellyfin-exporter\"})) or vector(0)" },
+    "jellyfin.transcodes":   { "query": "max(jellyfin_transcoding_sessions{job=\"jellyfin-exporter\"}) or vector(0)" },
+    "jellyfin.direct":       { "query": "clamp_min((count(max without (instance, pod, endpoint, container) (jellyfin_now_playing_state{job=\"jellyfin-exporter\"})) or vector(0)) - (max(jellyfin_transcoding_sessions{job=\"jellyfin-exporter\"}) or vector(0)), 0)" },
+    "jellyfin.users_active": { "query": "count(max without (instance, pod, endpoint, container) (jellyfin_user_active{job=\"jellyfin-exporter\"})) or vector(0)" },
+    "jellyfin.sessions": { "table": {
+      "query": "max by (username, device, title, series_title, series_season, series_episode, type, method) (jellyfin_now_playing_state{job=\"jellyfin-exporter\"})",
+      "key": ["username", "device", "title"],
+      "columns": {
+        "mode":        { "label": "method", "map": { "transcode": "transcode", "Transcode": "transcode", "*": "direct" } },
+        "title":       { "template": "{series_title}", "else": "{title}" },
+        "subtitle":    { "template": "{series_season} · {series_episode} — {title}", "else": "{type}" },
+        "user":        { "label": "username" },
+        "device":      { "label": "device" },
+        "hw":          { "query": "max by (username, device, title, hardware_acceleration) (jellyfin_transcoding_session_info{job=\"jellyfin-exporter\"})", "label": "hardware_acceleration" },
+        "vcodec":      { "query": "max by (username, device, title, video_codec) (jellyfin_transcoding_session_info{job=\"jellyfin-exporter\"})", "label": "video_codec" },
+        "acodec":      { "query": "max by (username, device, title, audio_codec) (jellyfin_transcoding_session_info{job=\"jellyfin-exporter\"})", "label": "audio_codec" },
+        "codec":       { "template": "{vcodec} · {acodec}" },
+        "bitrate_bps": { "query": "max by (username, device, title) (jellyfin_transcoding_session_bitrate_bits_per_second{job=\"jellyfin-exporter\"} * on (session_id) group_left (username, device, title) max by (session_id, username, device, title) (jellyfin_transcoding_session_info{job=\"jellyfin-exporter\"}))", "default": null }
+      },
+      "sort_by": "user", "limit": 3 } },
+    "jellyfin.library.movie":   { "query": "max(jellyfin_media_count{type=\"Movie\"})" },
+    "jellyfin.library.series":  { "query": "max(jellyfin_media_count{type=\"Series\"})" },
+    "jellyfin.library.episode": { "query": "max(jellyfin_media_count{type=\"Episode\"})" },
+    "jellyfin.library.album":   { "query": "max(jellyfin_media_count{type=\"Album\"})" },
+
+    "ups.battery_pct": { "query": "max(upsAdvBatteryCapacity)" },
+    "ups.load_pct":    { "query": "max(upsAdvOutputLoad)" },
+    "ups.load_w":      { "query": "max(upsAdvOutputLoad) * 27", "round": 0 },
+    "ups.runtime_s":   { "query": "max(upsAdvBatteryRunTimeRemaining_seconds)" },
+    "ups.on_battery":  { "query": "max(upsBasicOutputStatus{upsBasicOutputStatus=\"onBattery\"})", "default": 0 },
+    "ups.state":       { "query": "upsBasicOutputStatus == 1", "label": "upsBasicOutputStatus",
+                         "map": { "onLine": "On line", "onBattery": "On battery", "onSmartBoost": "Boosting", "onSmartTrim": "Trimming", "onBypass": "Bypass", "off": "Off" } },
+
+    "nas.volume_used_pct": { "query": "(1 - max(raidFreeSize{raidName=\"Volume 1\"}) / max(raidTotalSize{raidName=\"Volume 1\"})) * 100", "round": 1 },
+    "nas.volume_free_tb":  { "query": "max(raidFreeSize{raidName=\"Volume 1\"}) / 1e12", "round": 1 },
+    "nas.volume_total_tb": { "query": "max(raidTotalSize{raidName=\"Volume 1\"}) / 1e12", "round": 1 },
+    "nas.raid_status":     { "query": "max(raidStatus{raidName=\"Volume 1\"})" },
+    "nas.raid_text":       { "query": "max(raidStatus{raidName=\"Volume 1\"})",
+                             "map": { "1": "normal", "2": "repairing", "3": "migrating", "4": "expanding", "5": "deleting", "6": "creating",
+                                      "7": "syncing", "8": "parity check", "9": "assembling", "10": "canceling", "11": "degraded", "12": "crashed", "*": "unknown" } },
+    "nas.disks": { "table": {
+      "query": "diskTemperature{instance=\"192.168.86.61\",diskID=~\"0x4469736B.*\"}",
+      "key": ["diskID"],
+      "columns": {
+        "name":   { "label": "diskID", "hex": true, "regex": "^Disk (\\d+)$", "replace": "D$1" },
+        "temp_c": { "round": 0 },
+        "status": { "query": "diskStatus{instance=\"192.168.86.61\"}", "map": { "1": "ok", "*": "crit" }, "default": "unknown" }
+      },
+      "sort_by": "name", "limit": 4 } },
+
+    "backups": { "table": {
+      "query": "time() - kube_cronjob_status_last_successful_time{cronjob=~\".*backup.*\"}",
+      "key": ["namespace", "cronjob"],
+      "columns": {
+        "name":  { "label": "cronjob", "regex": "-backup$", "replace": "" },
+        "age_s": { "round": 0 }
+      },
+      "sort_by": "age_s", "limit": 4 } },
+
+    "dns.instances_up":  { "query": "count(up{job=\"technitium/technitium\"} == 1) or vector(0)" },
+    "dns.queries":       { "query": "sum(technitium_queries_total)" },
+    "dns.blocked":       { "query": "sum(technitium_queries_blocked)" },
+    "dns.cached":        { "query": "sum(technitium_queries_cached)" },
+    "dns.resolved":      { "query": "clamp_min(sum(technitium_queries_total) - sum(technitium_queries_blocked) - sum(technitium_queries_cached), 0)" },
+    "dns.blocked_pct":   { "query": "100 * sum(technitium_queries_blocked) / sum(technitium_queries_total)", "round": 1 },
+    "dns.cached_pct":    { "query": "100 * sum(technitium_queries_cached) / sum(technitium_queries_total)", "round": 1 },
+    "dns.resolved_pct":  { "query": "clamp_min(100 - 100 * (sum(technitium_queries_blocked) + sum(technitium_queries_cached)) / sum(technitium_queries_total), 0)", "round": 1 },
+    "dns.clients":       { "query": "sum(technitium_clients_unique)" },
+    "dns.queries_24h":   { "query": "sum(technitium_queries_total)", "range": "24h", "step": "1h" },
+
+    "lan.in_bps":       { "query": "sum(rate(ifHCInOctets{instance=\"192.168.86.53\",ifName=~\".*[Ee]thernet.*\"}[5m])) * 8" },
+    "lan.out_bps":      { "query": "sum(rate(ifHCOutOctets{instance=\"192.168.86.53\",ifName=~\".*[Ee]thernet.*\"}[5m])) * 8" },
+    "lan.in_mbps_1h":   { "query": "sum(rate(ifHCInOctets{instance=\"192.168.86.53\",ifName=~\".*[Ee]thernet.*\"}[5m])) * 8 / 1e6", "range": "1h", "step": "1m", "round": 0 },
+    "lan.out_mbps_1h":  { "query": "sum(rate(ifHCOutOctets{instance=\"192.168.86.53\",ifName=~\".*[Ee]thernet.*\"}[5m])) * 8 / 1e6", "range": "1h", "step": "1m", "round": 0 },
+    "lan.ports_up":     { "query": "count(ifOperStatus{instance=\"192.168.86.53\",ifName=~\".*[Ee]thernet.*\"} == 1)" },
+    "lan.ports_total":  { "query": "count(ifOperStatus{instance=\"192.168.86.53\",ifName=~\".*[Ee]thernet.*\"})" },
+    "lan.top_ports": { "table": {
+      "query": "topk(3, (rate(ifHCInOctets{instance=\"192.168.86.53\",ifName=~\".*[Ee]thernet.*\"}[5m]) + ignoring () rate(ifHCOutOctets{instance=\"192.168.86.53\",ifName=~\".*[Ee]thernet.*\"}[5m])) * 8)",
+      "key": ["ifIndex"],
+      "columns": {
+        "name":     { "label": "ifName", "regex": "^(?:ten-)?gigabitEthernet \\d+/\\d+/(\\d+)$", "replace": "Port $1" },
+        "bps":      { "round": 0 },
+        "util_pct": { "query": "100 * (rate(ifHCInOctets{instance=\"192.168.86.53\"}[5m]) + ignoring () rate(ifHCOutOctets{instance=\"192.168.86.53\"}[5m])) * 8 / 2 / (ifHighSpeed{instance=\"192.168.86.53\"} * 1e6 > 0)", "round": 1, "default": 0 }
+      },
+      "sort_by": "bps", "desc": true } }
+  }
+}

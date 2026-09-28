@@ -2,8 +2,18 @@
    inline-SVG charts. No dependencies, no network. Synchronous, so a headless
    screenshot taken on load sees the finished frame.
 
-   Data comes from <script type="application/json" id="data"> (mock today;
-   the renderer will inject real values with the same keys later).
+   Data comes from <script type="application/json" id="data">. The Go server
+   replaces its contents with live values when serving a screen; opened as a
+   plain file, the mock data in each screen is used.
+
+   Live mode: append ?live=N to a screen URL to re-fetch /api/data every N
+   seconds and re-render in place (for embedding a single screen elsewhere).
+
+   data-if="key" / data-unless="key" show an element only when the value is
+   truthy / falsy (e.g. an "alert data unavailable" message).
+
+   Thresholds: DATA.__thresholds["nodes.cpu_pct"] = {warn:">85", crit:">95"}
+   overrides data-warn/data-crit for that key (list items use listKey.field).
 
    Markup contract
    ---------------
@@ -22,7 +32,9 @@
 */
 (function () {
   const $data = document.getElementById("data");
-  const DATA = $data ? JSON.parse($data.textContent) : {};
+  let DATA = $data ? JSON.parse($data.textContent) : {};
+  const PRISTINE = document.body.cloneNode(true);
+  const thr = (key) => (DATA.__thresholds || {})[key] || {};
 
   const get = (root, path) =>
     path.split(".").filter(Boolean).reduce((o, k) => (o == null ? o : o[k]), root);
@@ -66,10 +78,17 @@
     return m[1] === ">" ? v > +m[2] : v < +m[2];
   }
 
-  function bindEl(el, item) {
+  function bindEl(el, item, listKey) {
     const key = el.getAttribute("data-bind");
     const v = lookup(el, key, item);
     if (v === undefined) return;
+    if (v === null) {
+      if (!el.classList.contains("meter") && el.tagName !== "svg" && el.getAttribute("data-fmt") !== "none") el.textContent = "–";
+      return;
+    }
+    const full = key.startsWith(".") ? listKey + key : key;
+    const T = thr(full);
+    const warn = T.warn ?? el.getAttribute("data-warn"), crit = T.crit ?? el.getAttribute("data-crit");
     if (el.classList.contains("meter")) {
       const max = +(el.getAttribute("data-max") || 100);
       el.style.setProperty("--v", Math.max(0, Math.min(100, (v / max) * 100)));
@@ -78,25 +97,25 @@
       if (el.hasAttribute("data-nounit") || !u) el.textContent = n;
       else { el.textContent = n; const s = document.createElement("span"); s.className = u === "°" ? "unit sym deg" : /^[%KM]$/.test(u) ? "unit sym" : "unit"; s.textContent = u; el.appendChild(s); }
     }
-    if (el.hasAttribute("data-warn") || el.hasAttribute("data-crit")) {
-      const st = thresh(el.getAttribute("data-crit"), v) ? "crit"
-               : thresh(el.getAttribute("data-warn"), v) ? "warn" : "ok";
+    if (warn != null || crit != null) {
+      const st = thresh(crit, v) ? "crit" : thresh(warn, v) ? "warn" : "ok";
       const sel = el.getAttribute("data-status-on");
       (sel ? el.closest(sel) : el).setAttribute("data-status", st);
     }
   }
 
-  function bindTree(root, item) {
+  function bindTree(root, item, listKey) {
     root.querySelectorAll("[data-list]").forEach((list) => {
       if (item === undefined && list.closest("template")) return;
       const tpl = list.querySelector(":scope > template");
-      const arr = lookup(list, list.getAttribute("data-list"), item) || [];
+      const lk = list.getAttribute("data-list");
+      const arr = lookup(list, lk, item) || [];
       const max = +(list.getAttribute("data-max-items") || 99);
       arr.slice(0, max).forEach((it) => {
         const frag = tpl.content.cloneNode(true);
         const wrap = document.createElement("div");
         wrap.appendChild(frag);
-        bindTree(wrap, it);
+        bindTree(wrap, it, lk.startsWith(".") ? listKey + lk : lk);
         [...wrap.children].forEach((c) => {
           // item-level attributes: data-attr-status=".severity" etc.
           [...c.attributes].forEach((a) => {
@@ -110,7 +129,7 @@
       if (el.closest("template")) return;
       const key = el.getAttribute("data-bind");
       if ((item === undefined) === key.startsWith(".")) return;
-      bindEl(el, item);
+      bindEl(el, item, listKey);
     });
     root.querySelectorAll("svg[data-chart]").forEach((svg) => {
       if (svg.closest("template")) return;
@@ -140,9 +159,11 @@
     const type = svg.getAttribute("data-chart");
     const keys = (svg.getAttribute("data-bind") || "").split(",").map((s) => s.trim());
     const series = keys.map((k) => lookup(svg, k, item));
+    if (series.some((s) => s == null || (Array.isArray(s) && s.length === 0))) return;
+    const T = thr(keys[0]);
     const W = +svg.getAttribute("width"), H = +svg.getAttribute("height");
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    const opt = (n, d) => (svg.hasAttribute("data-" + n) ? svg.getAttribute("data-" + n) : d);
+    const opt = (n, d) => (T[n] != null ? T[n] : svg.hasAttribute("data-" + n) ? svg.getAttribute("data-" + n) : d);
     ({ area, spark, ring, bars, stack })[type](svg, series, W, H, opt);
   }
 
@@ -154,9 +175,13 @@
     const unit = opt("unit", "");
     const axisW = +opt("axis-w", 0), xlabH = opt("xlabels", "") ? 20 : 0;
     const pw = W - axisW, ph = H - xlabH;
-    const max = +opt("max", 0) || niceMax(Math.max(...series.flat()));
+    // data-max="auto" scales to the data (grid at quarters); a fixed max
+    // keeps a capacity view. Reference lines above the scale are omitted.
+    const auto = opt("max", "") === "auto";
+    const max = (!auto && +opt("max", 0)) || niceMax(Math.max(1, ...series.flat()));
     const y = (v) => ph - (v / max) * (ph - 4);
-    const grid = opt("grid", "").split(",").filter(Boolean).map(Number);
+    const q = (f) => +(max * f).toPrecision(2);
+    const grid = auto ? [q(0.25), q(0.5), q(0.75), max] : opt("grid", "").split(",").filter(Boolean).map(Number);
     grid.forEach((g) => {
       mk("line", { x1: 0, x2: pw, y1: y(g), y2: y(g), stroke: css("--line"), "stroke-width": 1 }, svg);
       if (axisW) mk("text", { x: pw + 8, y: y(g) + 5 }, svg).textContent = g + (unit ? " " + unit : "");
@@ -181,7 +206,7 @@
     const refKey = opt("ref", "");
     if (refKey) {
       const rv = get(DATA, refKey);
-      if (rv != null) {
+      if (rv != null && rv <= max) {
         mk("line", { x1: 0, x2: pw, y1: y(rv), y2: y(rv), stroke: css("--ink-2"), "stroke-width": 1.5, "stroke-dasharray": "6 6" }, svg);
         const t = mk("text", { x: 4, y: y(rv) - 7, class: "v" }, svg);
         t.textContent = opt("ref-label", "{v}").replace("{v}", Math.round(rv));
@@ -254,15 +279,16 @@
     const c = DATA.clock || {};
     const d = new Date();
     const t = c.time || d.toTimeString().slice(0, 5);
-    const ds = c.date || d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }).replace(",", "");
+    const ds = c.date || `${d.toLocaleDateString("en-US", { weekday: "short" })} ${d.getDate()} ${d.toLocaleDateString("en-US", { month: "short" })}`;
     document.querySelectorAll("[data-clock]").forEach((e) => (e.textContent = t));
     document.querySelectorAll("[data-date]").forEach((e) => (e.textContent = ds));
   }
 
   // rotation dots: <div class="dots" data-dots="7" data-on="2">
   function dots() {
+    const r = DATA.rotation;
     document.querySelectorAll("[data-dots]").forEach((d) => {
-      const n = +d.getAttribute("data-dots"), on = +d.getAttribute("data-on");
+      const n = r ? r.count : +d.getAttribute("data-dots"), on = r ? r.index : +d.getAttribute("data-on");
       for (let i = 0; i < n; i++) { const e = document.createElement("i"); if (i === on) e.className = "on"; d.appendChild(e); }
     });
   }
@@ -271,7 +297,10 @@
   function badge() {
     const b = document.querySelector("[data-badge]"); if (!b) return;
     const a = DATA.alerts || { critical: 0, warning: 0 };
-    if (a.critical > 0 || a.warning > 0) {
+    if (a.unavailable) {
+      b.classList.add("unknown");
+      b.innerHTML = `<i class="st"></i><span style="letter-spacing:.06em">ALERTS N/A</span>`;
+    } else if (a.critical > 0 || a.warning > 0) {
       b.classList.add(a.critical > 0 ? "firing" : "warning");
       b.innerHTML = (a.critical ? `<span class="n"><i class="st crit" style="background:#fff"></i>${a.critical}</span>` : "") +
         (a.warning ? `<span class="n"><i class="st warn"></i>${a.warning}</span>` : "") +
@@ -281,5 +310,25 @@
     }
   }
 
-  dots(); clock(); badge(); bindTree(document);
+  function conditions() {
+    document.querySelectorAll("[data-if]").forEach((e) => { if (!get(DATA, e.getAttribute("data-if"))) e.remove(); });
+    document.querySelectorAll("[data-unless]").forEach((e) => { if (get(DATA, e.getAttribute("data-unless"))) e.remove(); });
+  }
+
+  function render() { conditions(); dots(); clock(); badge(); bindTree(document); }
+  render();
+  setInterval(clock, 1000);
+
+  const live = +new URLSearchParams(location.search).get("live");
+  if (live > 0) {
+    setInterval(async () => {
+      try {
+        const r = await fetch("/api/data" + location.search, { cache: "no-store" });
+        if (!r.ok) return;
+        DATA = await r.json();
+        document.body.replaceWith(PRISTINE.cloneNode(true));
+        render();
+      } catch (e) { /* keep last frame */ }
+    }, live * 1000);
+  }
 })();
