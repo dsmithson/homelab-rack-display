@@ -99,13 +99,41 @@ Docker Hub `dsmithson/rack-display`:
 | `main` (only `*.md`, `docs/`, `deploy/`, `design/renders/`) | none, build skipped |
 | tag `v1.2.3` | `1.2.3`, `1.2`, `1` |
 
-The cluster pins a release: both the image tag and the chart's
-`targetRevision` in homelab-helm-charts. To release:
+### Why it works this way
+
+- **The cluster runs a pinned release, never `latest`.** ArgoCD self-heals
+  and the old `latest` + `pullPolicy: Always` setup meant any pod restart
+  (node reboot, eviction) could silently pick up whatever `main` last built.
+  With a fixed tag, what runs only changes when homelab-helm-charts changes,
+  so every deploy is a reviewable commit there and a rollback is reverting it.
+- **The chart is pinned too.** ArgoCD reads `chart/` from this repo, so
+  `targetRevision: main` would let a chart edit on `main` roll out on its own,
+  possibly ahead of (or behind) the image it expects. Pinning the chart to the
+  same `vX.Y.Z` tag as the image keeps the two in lockstep.
+- **`main` still publishes `latest` and `sha-<short>`** as a dev channel for
+  trying a build before cutting a release (e.g. temporarily point the values
+  at `sha-abc1234`).
+- **Doc-only pushes skip the build.** They can't change the image, so a
+  rebuild would only burn CI minutes and churn `latest` to a bit-identical
+  image. Tag pushes always build (GitHub ignores path filters for tags), so
+  tagging a docs-only commit still produces a release.
+- **Semver, loosely:** patch for fixes and query/threshold tweaks, minor for
+  new screens or bindings, major for breaking config/chart changes (e.g.
+  renamed values or data keys). `X.Y` and `X` tags float to the newest
+  release in that line if you'd rather track fixes automatically, but the
+  cluster pins the exact version.
+
+### Cutting a release
 
 ```bash
-git tag v1.2.3 && git push origin v1.2.3     # wait for the image workflow
-# then in homelab-helm-charts: rack-display/values.yaml image.tag: "1.2.3"
-#   and argoCD/applications/rack-display.yaml targetRevision: v1.2.3
+# 1. bump appVersion in chart/Chart.yaml to 1.2.3, commit and push to main
+# 2. tag that commit
+git tag -a v1.2.3 -m "v1.2.3: <summary>" && git push origin v1.2.3
+# 3. wait for the image workflow (gh run watch), confirm dsmithson/rack-display:1.2.3
+# 4. in homelab-helm-charts, bump both pins and push:
+#      rack-display/values.yaml               image.tag: "1.2.3"
+#      argoCD/applications/rack-display.yaml  targetRevision: v1.2.3
 ```
 
-Bump `appVersion` in `chart/Chart.yaml` alongside.
+Rollback: revert step 4 in homelab-helm-charts; the older image and chart tag
+are still published.
