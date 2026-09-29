@@ -1,10 +1,26 @@
 name: image
 
+# main   -> dsmithson/rack-display:latest and :sha-<short>   (dev channel)
+# v1.2.3 -> dsmithson/rack-display:1.2.3, :1.2 and :1        (releases; pin these)
+# Doc-only changes don't build. Path filters are ignored for tag pushes, so
+# tagging a doc-only commit still publishes a release image.
 on:
   push:
     branches: [main]
     tags: ["v*"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "deploy/**"
+      - "design/renders/**"
+      - "LICENSE"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "deploy/**"
+      - "design/renders/**"
+      - "LICENSE"
 
 jobs:
   build:
@@ -28,13 +44,18 @@ jobs:
           images: dsmithson/rack-display
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,format=short
+            type=sha,format=short,enable={{is_default_branch}}
             type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+          flavor: |
+            latest=false
       - uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/arm64,linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

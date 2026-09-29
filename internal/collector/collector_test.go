@@ -50,6 +50,9 @@ func TestTemplate(t *testing.T) {
 	if got := template("{series_season} · {series_episode} — {title}", "{type}", labels, nil); got != "S2 · E5 — Dune" {
 		t.Errorf("series: got %q", got)
 	}
+	if got := template("{vcodec} · {acodec}", "", labels, map[string]any{"vcodec": nil}); got != "" {
+		t.Errorf("unresolved without else: got %q, want empty", got)
+	}
 	row := map[string]any{"avail": 0.0, "spec": 1.0}
 	if got := template("{avail}/{spec}", "", nil, row); got != "0/1" {
 		t.Errorf("row refs: got %q", got)

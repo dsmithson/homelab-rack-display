@@ -328,7 +328,8 @@ func keyOf(labels map[string]string, key []string) string {
 var tmplRef = regexp.MustCompile(`\{([a-zA-Z0-9_]+)\}`)
 
 // template substitutes {name} from row columns, then labels. If any reference
-// is empty and els is set, els is expanded instead.
+// is empty, els is expanded instead (or "" when there is no els), so a
+// template never renders half-filled like " · ".
 func template(t, els string, labels map[string]string, row map[string]any) string {
 	missing := false
 	out := tmplRef.ReplaceAllStringFunc(t, func(m string) string {
@@ -342,7 +343,10 @@ func template(t, els string, labels map[string]string, row map[string]any) strin
 		missing = true
 		return ""
 	})
-	if missing && els != "" {
+	if missing {
+		if els == "" {
+			return ""
+		}
 		return template(els, "", labels, row)
 	}
 	return out

@@ -27,7 +27,7 @@ the same rotation page a browser sees, so the web view and the panel always matc
 | `internal/drm` | DRM/KMS dumb-buffer output (incl. the udl 640x480 minimum-framebuffer workaround) |
 | `internal/collector` | Evaluates bindings into the data document |
 | `chart/` | Helm chart (ArgoCD consumes it from this repo) |
-| `deploy/homelab-helm-charts/` | Files to copy into the GitOps repo (Application, values, Grafana SA) |
+| `deploy/udl-dkms/` | DKMS config for the panel's `udl` kernel module |
 | `docs/` | Data-source survey, panel driver setup |
 
 ## Configuration (`config/display.json`)
@@ -75,19 +75,37 @@ server needed) for design iteration.
 
 ## Deploy
 
-1. Panel driver on the node: see `docs/panel-driver.md` (make `udl` persistent via DKMS).
-2. Image: `.github/workflows/image.yml` builds `linux/arm64,amd64` and pushes
-   `dsmithson/rack-display` (needs `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` repo secrets).
-3. Grafana token: add `deploy/homelab-helm-charts/grafana-terraform/rack-display.tf`
-   to `grafana-terraform/`, apply, then
-   `kubectl create namespace rack-display` and
-   `kubectl create secret generic rack-display-grafana -n rack-display --from-literal=GRAFANA_TOKEN=$(terraform output -raw rack_display_token)`.
-4. GitOps: copy `deploy/homelab-helm-charts/argoCD/applications/rack-display.yaml` and
-   `deploy/homelab-helm-charts/rack-display/values.yaml` into homelab-helm-charts;
-   add `rack-display` to the reflector namespace lists in
-   `cert-manager/wildcard-int-knightware-net.yaml`. `rackdisplay.int.knightware.net`
-   is already covered by the `*.int.knightware.net` wildcard DNS record.
+Runs in the homelab cluster via ArgoCD. The cluster-side pieces live in
+[homelab-helm-charts](https://github.com/dsmithson/homelab-helm-charts):
+`argoCD/applications/rack-display.yaml` (chart from this repo's `chart/`),
+`rack-display/values.yaml`, and the Grafana service account in
+`grafana-terraform/rack-display.tf` (token in secret
+`rack-display/rack-display-grafana`).
 
-The pod is privileged (DRM master on `/dev/dri`) and pinned to `turing01-04`.
-Only one process can drive the panel: stop the pod before running `displaytest` there.
-If the panel is absent, the app keeps serving the web view and retries every 30s.
+The pod is privileged (DRM master on `/dev/dri`) and pinned to `turing01-04`,
+which needs the `udl` kernel module: see `docs/panel-driver.md`. Only one
+process can drive the panel, so stop the pod before running `displaytest`
+there. If the panel is absent, the app keeps serving the web view and retries
+every 30s.
+
+## Releases
+
+`.github/workflows/image.yml` builds `linux/arm64` + `linux/amd64` images to
+Docker Hub `dsmithson/rack-display`:
+
+| Push | Image tags |
+|---|---|
+| `main` (code changes) | `latest`, `sha-<short>` |
+| `main` (only `*.md`, `docs/`, `deploy/`, `design/renders/`) | none, build skipped |
+| tag `v1.2.3` | `1.2.3`, `1.2`, `1` |
+
+The cluster pins a release: both the image tag and the chart's
+`targetRevision` in homelab-helm-charts. To release:
+
+```bash
+git tag v1.2.3 && git push origin v1.2.3     # wait for the image workflow
+# then in homelab-helm-charts: rack-display/values.yaml image.tag: "1.2.3"
+#   and argoCD/applications/rack-display.yaml targetRevision: v1.2.3
+```
+
+Bump `appVersion` in `chart/Chart.yaml` alongside.
