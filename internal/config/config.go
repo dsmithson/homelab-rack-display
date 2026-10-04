@@ -71,7 +71,7 @@ type Table struct {
 
 // Column computes one field of a table row. Sources (first match wins):
 // Const, Query (joined on key; Range makes it an array; with Label, that
-// label of the joined series), Label, Template, otherwise the row's value. Transforms apply after: Hex, Regex/Replace,
+// label of the joined series), Label, Template, otherwise the row's value. Transforms apply after (not to a joined Default): Hex, Regex/Replace,
 // Scale, Round, Map.
 type Column struct {
 	Const    any      `json:"const,omitempty"`

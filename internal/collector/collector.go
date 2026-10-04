@@ -251,7 +251,9 @@ func (c *Collector) table(ctx context.Context, t config.Table, now time.Time) ([
 			case col.Query != "": // joined; Label (if set) is read from the joined series
 				jv, ok := joined[name][k]
 				if !ok {
-					jv = col.Default
+					// Default is literal: a "*" map fallback must not rewrite it.
+					row[name] = col.Default
+					continue
 				}
 				v = jv
 			case col.Label != "":

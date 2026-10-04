@@ -103,9 +103,10 @@ func fakeProm(t *testing.T, results map[string]string) *httptest.Server {
 
 func TestRefreshTableJoin(t *testing.T) {
 	srv := fakeProm(t, map[string]string{
-		"rtt":  `[{"metric":{"target_name":"Quad9"},"value":[0,"22.21"]},{"metric":{"target_name":"Cloudflare"},"value":[0,"11.66"]}]`,
-		"loss": `[{"metric":{"target_name":"Cloudflare"},"value":[0,"5"]}]`,
-		"up":   `[{"metric":{},"value":[0,"1"]}]`,
+		"rtt":   `[{"metric":{"target_name":"Quad9"},"value":[0,"22.21"]},{"metric":{"target_name":"Cloudflare"},"value":[0,"11.66"]}]`,
+		"loss":  `[{"metric":{"target_name":"Cloudflare"},"value":[0,"5"]}]`,
+		"up":    `[{"metric":{},"value":[0,"1"]}]`,
+		"local": `[{"metric":{"target_name":"Quad9"},"value":[0,"1"]}]`,
 	})
 	defer srv.Close()
 	one := 1
@@ -118,6 +119,8 @@ func TestRefreshTableJoin(t *testing.T) {
 				"target":   {Label: "target_name"},
 				"rtt_ms":   {Round: &one},
 				"loss_pct": {Query: "loss", Default: 0.0},
+				// "*" maps any joined value; the default must stay literal.
+				"kind": {Query: "local", Map: map[string]any{"*": "local"}, Default: "cloud"},
 			},
 		}},
 	}}
@@ -127,7 +130,7 @@ func TestRefreshTableJoin(t *testing.T) {
 	b, _ := json.Marshal(doc)
 	got := string(b)
 	for _, want := range []string{
-		`"ping":[{"loss_pct":5,"rtt_ms":11.7,"target":"Cloudflare"},{"loss_pct":0,"rtt_ms":22.2,"target":"Quad9"}]`,
+		`"ping":[{"kind":"cloud","loss_pct":5,"rtt_ms":11.7,"target":"Cloudflare"},{"kind":"local","loss_pct":0,"rtt_ms":22.2,"target":"Quad9"}]`,
 		`"svc":{"none":0,"up":1}`,
 	} {
 		if !strings.Contains(got, want) {
