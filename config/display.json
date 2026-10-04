@@ -12,7 +12,9 @@
     { "screen": "04-power-storage", "dwell": "12s" },
     { "screen": "05-dns-network",   "dwell": "12s" },
     { "screen": "06-alerts-clear",  "dwell": "10s",
-      "variants": [ { "when": "alerts.critical > 0 || alerts.warning > 0", "screen": "06b-alerts-firing" } ] }
+      "variants": [ { "when": "alerts.critical > 0 || alerts.warning > 0", "screen": "06b-alerts-firing" } ] },
+    { "screen": "07-llm",           "dwell": "12s" },
+    { "screen": "07b-llm-24h",      "dwell": "12s" }
   ],
   "priority": { "when": "alerts.critical > 0", "screen": "06b-alerts-firing", "dwell": "20s" },
 
@@ -36,7 +38,11 @@
     "backups.age_s":         { "warn": ">93600", "crit": ">172800" },
     "dns.instances_up":      { "warn": "<2",  "crit": "<1" },
     "alerts.critical":       { "crit": ">0" },
-    "alerts.warning":        { "warn": ">0" }
+    "alerts.warning":        { "warn": ">0" },
+    "llm.up":                { "crit": "<1" },
+    "llm.fail_pct_7d":       { "warn": ">5",  "crit": ">25" },
+    "llm.fail_pct_24h":      { "warn": ">5",  "crit": ">25" },
+    "llm.upstream_state_max":{ "warn": ">0",  "crit": ">1" }
   },
 
   "data": {
@@ -188,6 +194,57 @@
         "bps":      { "round": 0 },
         "util_pct": { "query": "100 * (rate(ifHCInOctets{instance=\"192.168.86.53\"}[5m]) + ignoring () rate(ifHCOutOctets{instance=\"192.168.86.53\"}[5m])) * 8 / 2 / (ifHighSpeed{instance=\"192.168.86.53\"} * 1e6 > 0)", "round": 1, "default": 0 }
       },
-      "sort_by": "bps", "desc": true } }
+      "sort_by": "bps", "desc": true } },
+
+    "llm.up":               { "query": "max(up{job=\"litellm-metrics\"}) or vector(0)" },
+    "llm.tokens_7d":        { "query": "sum(increase(litellm_total_tokens_metric_total[7d])) or vector(0)", "round": 0 },
+    "llm.tokens_local_7d":  { "query": "sum(increase(litellm_total_tokens_metric_total{model=~\".*:.*\"}[7d])) or vector(0)", "round": 0 },
+    "llm.tokens_cloud_7d":  { "query": "sum(increase(litellm_total_tokens_metric_total{model!~\".*:.*\"}[7d])) or vector(0)", "round": 0 },
+    "llm.local_pct_7d":     { "query": "100 * sum(increase(litellm_total_tokens_metric_total{model=~\".*:.*\"}[7d])) / (sum(increase(litellm_total_tokens_metric_total[7d])) > 0)", "round": 1, "default": 0 },
+    "llm.cloud_pct_7d":     { "query": "100 * sum(increase(litellm_total_tokens_metric_total{model!~\".*:.*\"}[7d])) / (sum(increase(litellm_total_tokens_metric_total[7d])) > 0)", "round": 1, "default": 0 },
+    "llm.requests_7d":      { "query": "sum(increase(litellm_proxy_total_requests_metric_total[7d])) or vector(0)", "round": 0 },
+    "llm.output_tokens_7d": { "query": "sum(increase(litellm_output_tokens_metric_total[7d])) or vector(0)", "round": 0 },
+    "llm.tokens_local_1d_7d": { "query": "sum(increase(litellm_total_tokens_metric_total{model=~\".*:.*\"}[1d])) or vector(0)", "range": "144h", "step": "24h", "round": 0 },
+    "llm.tokens_cloud_1d_7d": { "query": "sum(increase(litellm_total_tokens_metric_total{model!~\".*:.*\"}[1d])) or vector(0)", "range": "144h", "step": "24h", "round": 0 },
+    "llm.top_models": { "table": {
+      "query": "topk(3, sum by (requested_model) (increase(litellm_total_tokens_metric_total[7d])) > 0)",
+      "key": ["requested_model"],
+      "columns": {
+        "name":   { "label": "requested_model" },
+        "tokens": { "round": 0 },
+        "pct":    { "query": "100 * sum by (requested_model) (increase(litellm_total_tokens_metric_total[7d])) / scalar(sum(increase(litellm_total_tokens_metric_total[7d])))", "round": 1, "default": 0 },
+        "kind":   { "query": "sum by (requested_model) (increase(litellm_total_tokens_metric_total{model=~\".*:.*\"}[7d])) > 0", "map": { "*": "local" }, "default": "cloud" }
+      },
+      "sort_by": "tokens", "desc": true, "limit": 3 } },
+    "llm.failed_7d":        { "query": "sum(increase(litellm_proxy_failed_requests_metric_total[7d])) or vector(0)", "round": 0 },
+    "llm.fail_pct_7d":      { "query": "100 * sum(increase(litellm_proxy_failed_requests_metric_total[7d])) / (sum(increase(litellm_proxy_total_requests_metric_total[7d])) > 0)", "round": 1, "default": 0 },
+    "llm.in_flight":        { "query": "sum(litellm_in_flight_requests) or vector(0)" },
+    "llm.gen_tps_local_7d": { "query": "sum(increase(litellm_deployment_latency_per_output_token_count{litellm_model_name=~\".*:.*\"}[7d])) / (sum(increase(litellm_deployment_latency_per_output_token_sum{litellm_model_name=~\".*:.*\"}[7d])) > 0)", "round": 0, "default": null },
+    "llm.upstreams_total":  { "query": "count(max by (litellm_model_name) (litellm_deployment_state)) or vector(0)" },
+    "llm.upstreams_ok":     { "query": "count(max by (litellm_model_name) (litellm_deployment_state)) - (count((max by (litellm_model_name) (litellm_deployment_state) > 0) and on (litellm_model_name) (sum by (litellm_model_name) (increase(litellm_deployment_total_requests_total[1h])) > 0)) or vector(0))", "default": 0 },
+    "llm.upstream_state_max": { "query": "max(max by (litellm_model_name) (litellm_deployment_state) and on (litellm_model_name) (sum by (litellm_model_name) (increase(litellm_deployment_total_requests_total[1h])) > 0)) or vector(0)" },
+
+    "llm.tokens_24h":        { "query": "sum(increase(litellm_total_tokens_metric_total[24h])) or vector(0)", "round": 0 },
+    "llm.tokens_local_24h":  { "query": "sum(increase(litellm_total_tokens_metric_total{model=~\".*:.*\"}[24h])) or vector(0)", "round": 0 },
+    "llm.tokens_cloud_24h":  { "query": "sum(increase(litellm_total_tokens_metric_total{model!~\".*:.*\"}[24h])) or vector(0)", "round": 0 },
+    "llm.local_pct_24h":     { "query": "100 * sum(increase(litellm_total_tokens_metric_total{model=~\".*:.*\"}[24h])) / (sum(increase(litellm_total_tokens_metric_total[24h])) > 0)", "round": 1, "default": 0 },
+    "llm.cloud_pct_24h":     { "query": "100 * sum(increase(litellm_total_tokens_metric_total{model!~\".*:.*\"}[24h])) / (sum(increase(litellm_total_tokens_metric_total[24h])) > 0)", "round": 1, "default": 0 },
+    "llm.requests_24h":      { "query": "sum(increase(litellm_proxy_total_requests_metric_total[24h])) or vector(0)", "round": 0 },
+    "llm.output_tokens_24h": { "query": "sum(increase(litellm_output_tokens_metric_total[24h])) or vector(0)", "round": 0 },
+    "llm.tokens_local_1h_24h": { "query": "sum(increase(litellm_total_tokens_metric_total{model=~\".*:.*\"}[1h])) or vector(0)", "range": "23h", "step": "1h", "round": 0 },
+    "llm.tokens_cloud_1h_24h": { "query": "sum(increase(litellm_total_tokens_metric_total{model!~\".*:.*\"}[1h])) or vector(0)", "range": "23h", "step": "1h", "round": 0 },
+    "llm.top_models_24h": { "table": {
+      "query": "topk(3, sum by (requested_model) (increase(litellm_total_tokens_metric_total[24h])) > 0)",
+      "key": ["requested_model"],
+      "columns": {
+        "name":   { "label": "requested_model" },
+        "tokens": { "round": 0 },
+        "pct":    { "query": "100 * sum by (requested_model) (increase(litellm_total_tokens_metric_total[24h])) / scalar(sum(increase(litellm_total_tokens_metric_total[24h])))", "round": 1, "default": 0 },
+        "kind":   { "query": "sum by (requested_model) (increase(litellm_total_tokens_metric_total{model=~\".*:.*\"}[24h])) > 0", "map": { "*": "local" }, "default": "cloud" }
+      },
+      "sort_by": "tokens", "desc": true, "limit": 3 } },
+    "llm.failed_24h":        { "query": "sum(increase(litellm_proxy_failed_requests_metric_total[24h])) or vector(0)", "round": 0 },
+    "llm.fail_pct_24h":      { "query": "100 * sum(increase(litellm_proxy_failed_requests_metric_total[24h])) / (sum(increase(litellm_proxy_total_requests_metric_total[24h])) > 0)", "round": 1, "default": 0 },
+    "llm.gen_tps_local_24h": { "query": "sum(increase(litellm_deployment_latency_per_output_token_count{litellm_model_name=~\".*:.*\"}[24h])) / (sum(increase(litellm_deployment_latency_per_output_token_sum{litellm_model_name=~\".*:.*\"}[24h])) > 0)", "round": 0, "default": null }
   }
 }

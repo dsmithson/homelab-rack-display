@@ -57,8 +57,9 @@ The left rail is 176 px wide and holds:
 A 6 px **status stripe** on the rail's left edge shows the *worst state on this screen* (green/amber/red),
 set with `body[data-status]`. It is separate from the alert badge. The stripe is local health computed from
 thresholds (e.g. a node at 73 °C); the badge is Grafana alert state. They can legitimately differ, as in the
-cluster mock: amber stripe, "all clear" badge. The daemon should set `data-status` to the worst `data-status`
-found among the screen's elements.
+cluster mock: red stripe (a CrashLoopBackOff), "all clear" badge. `display.js` sets it after binding to the
+worst `data-status` among the screen's elements (rail excluded); a screen with no thresholded elements keeps
+its static `body[data-status]`.
 
 ## Tokens (tokens.css)
 
@@ -91,6 +92,8 @@ swatch, `.pill`.
 | 4 | `04-power-storage.html` | UPS battery ring, runtime, load (W derived), NAS volume, disk temps, backup freshness | 12 s |
 | 5 | `05-dns-network.html` | Technitium queries/blocked/clients with resolved/cached/blocked split, LAN in/out 1 h, ports up, busiest ports | 12 s |
 | 6 | `06-alerts-clear.html` / `06b-alerts-firing.html` | Calm all-clear, or crit/warn counts plus up to 4 firing alerts | 10 s (firing: see below) |
+| 7 | `07-llm.html` | LiteLLM over 7 days: total tokens with local/Claude split, tokens per day (stacked local + Claude), top 3 requested models, proxy health (upstreams, failures, in flight, local generation speed) | 12 s |
+| 7b | `07b-llm-24h.html` | Same layout over the last 24 h: tokens per hour (24 stacked bars, right-hand axis instead of per-bar totals), `*_24h` keys | 12 s |
 
 Suggested behaviour:
 * **When any critical alert fires**, show `06b` every other slot (overview, alerts, internet, alerts, …) and
@@ -114,7 +117,11 @@ Markup contract (implemented in `display.js`):
 * `data-list="key"` + `<template>` repeats a block per array item. Inside it, a key starting with `.` is
   relative to the item, and `data-attr-X=".k"` copies `k` into attribute `X`.
 * `svg[data-chart]`: `area` (multiple series on one shared y-scale; `data-fills`, `data-grid`, `data-ref`
-  reference line, `data-xlabels`), `spark`, `bars`, `ring`, `stack` (100 % bar).
+  reference line, `data-xlabels`), `spark`, `bars`, `ring`, `stackbars` (vertical columns with one stacked
+  segment per series, bottom-up in `data-bind` order, on one shared y-scale; empty buckets draw a 2 px stub;
+  `data-colors`, `data-max`, `data-axis-w`, `data-values="1"` for a compact total above each bar, and
+  `data-xlabels` centred under the bars when there is one label per bar), `stack` (100 % bar; an empty
+  track when every part is 0).
 
 ### Key → metric mapping
 
@@ -215,3 +222,16 @@ WAN interface is `ix0_vlan100` today. It will change when WAN moves to a dedicat
   the server's playlist, a ticking clock, and "–" for missing values.
 - `index.html` is the rotator (double-buffered iframes); the panel renderer
   screenshots `/?panel`.
+- **LLM screen (`07-llm`)**: daily bars are a range query of
+  `increase(...[1d])` over `144h` at step `24h`, which gives exactly 7 points
+  (rolling 24 h windows ending now, so they add up to the 7-day total; "today"
+  is the last 24 h). Config durations are Go durations, so write `24h`, not `1d`.
+- **Upstream health is gated on recent traffic.** `litellm_deployment_state`
+  (0 ok, 1 partial, 2 outage) only changes when a request passes through a
+  deployment, so idle deployments keep their last state for days (e.g. an alias
+  stuck at 2 after an old 429 burst). `llm.upstream_state_max` and the "not ok"
+  part of `llm.upstreams_ok` only count deployments with requests in the last
+  hour (`increase(litellm_deployment_total_requests_total[1h]) > 0`, joined on
+  `litellm_model_name`); `llm.upstreams_total` counts every deployment name.
+  A deployment that fails and then gets no traffic (e.g. cooled down with no
+  retries) drops out of the check an hour later.

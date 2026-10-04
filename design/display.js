@@ -28,7 +28,7 @@
                           "closest-selector").
    .meter[data-bind]      sets --v (0-100) from the value (data-max to scale)
    data-list="key"        repeats the child <template> for each array item
-   svg[data-chart]        area | spark | ring | bars | stack  (see below)
+   svg[data-chart]        area | spark | ring | bars | stackbars | stack  (see below)
 */
 (function () {
   const $data = document.getElementById("data");
@@ -164,7 +164,7 @@
     const W = +svg.getAttribute("width"), H = +svg.getAttribute("height");
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     const opt = (n, d) => (T[n] != null ? T[n] : svg.hasAttribute("data-" + n) ? svg.getAttribute("data-" + n) : d);
-    ({ area, spark, ring, bars, stack })[type](svg, series, W, H, opt);
+    ({ area, spark, ring, bars, stackbars, stack })[type](svg, series, W, H, opt);
   }
 
   /* area: one or more series on ONE shared y-scale. Flat fills (no gradient).
@@ -263,10 +263,56 @@
     });
   }
 
-  /* stack: 100% horizontal stacked bar from parts; data-colors; 2px surface gaps */
+  /* stackbars: vertical columns, one stacked segment per series (bottom-up in
+     data-bind order) on one shared y-scale. Made for bursty counts where most
+     buckets are 0: an empty bucket draws a 2 px --line-2 stub so the time axis
+     stays readable. data-colors, data-max (default: nice max of the column
+     totals), data-axis-w (right labels at max/2 and max, compact-formatted),
+     data-xlabels (centred under the bars when there is one label per bar),
+     data-values="1" (column total above each non-empty bar, compact), data-unit */
+  function stackbars(svg, series, W, H, opt) {
+    const colors = opt("colors", "--c-1,--c-2,--c-3").split(",");
+    const unit = opt("unit", "");
+    const axisW = +opt("axis-w", 0), xlabH = opt("xlabels", "") ? 20 : 0;
+    const n = series[0].length, gap = n <= 14 ? 8 : 3, vals = opt("values", "") === "1";
+    const pw = W - axisW, ph = H - xlabH, top = vals ? 22 : 4;
+    const tot = series[0].map((_, j) => series.reduce((a, s) => a + (s[j] || 0), 0));
+    const max = +opt("max", 0) || niceMax(Math.max(1, ...tot));
+    const y = (v) => ph - (v / max) * (ph - top);
+    const cfmt = (v) => FMT.compact(v).join("").replace(".0", "");
+    if (axisW) [max / 2, max].forEach((g) => {
+      mk("line", { x1: 0, x2: pw, y1: y(g), y2: y(g), stroke: css("--line"), "stroke-width": 1 }, svg);
+      mk("text", { x: pw + 8, y: y(g) + 5 }, svg).textContent = cfmt(g) + (unit ? " " + unit : "");
+    });
+    const bw = (pw - gap * (n - 1)) / n;
+    for (let j = 0; j < n; j++) {
+      const x = j * (bw + gap);
+      if (tot[j] <= 0) { mk("rect", { x, y: ph - 2, width: bw, height: 2, fill: css("--line-2") }, svg); continue; }
+      let base = ph;
+      series.forEach((s, i) => {
+        const v = s[j] || 0; if (v <= 0) return;
+        const h = Math.max(2, (v / max) * (ph - top));
+        mk("rect", { x, y: base - h, width: bw, height: h, fill: color(colors[i]) }, svg);
+        base -= h;
+      });
+      if (vals) mk("text", { x: x + bw / 2, y: base - 6, "text-anchor": "middle", class: "v" }, svg).textContent = cfmt(tot[j]);
+    }
+    mk("line", { x1: 0, x2: pw, y1: ph, y2: ph, stroke: css("--line-2"), "stroke-width": 2 }, svg);
+    const xl = opt("xlabels", "").split(",").filter(Boolean);
+    const centred = xl.length === n;
+    xl.forEach((t, i) => {
+      const tx = centred ? i * (bw + gap) + bw / 2 : (i / (xl.length - 1)) * pw;
+      const anchor = centred ? "middle" : i === 0 ? "start" : i === xl.length - 1 ? "end" : "middle";
+      mk("text", { x: tx, y: H - 2, "text-anchor": anchor }, svg).textContent = t;
+    });
+  }
+
+  /* stack: 100% horizontal stacked bar from parts; data-colors; 2px surface gaps.
+     All parts 0 (or missing) -> an empty --surface-2 track. */
   function stack(svg, series, W, H, opt) {
     const colors = opt("colors", "--c-1,--c-2,--c-3").split(",");
-    const tot = series.reduce((a, b) => a + b, 0) || 1; let x = 0; const gap = 3;
+    const tot = series.reduce((a, b) => a + b, 0); let x = 0; const gap = 3;
+    if (!(tot > 0)) { mk("rect", { x: 0, y: 0, width: W, height: H, rx: 4, fill: css("--surface-2") }, svg); return; }
     series.forEach((v, i) => {
       const w = (v / tot) * (W - gap * (series.length - 1));
       mk("rect", { x, y: 0, width: Math.max(0, w), height: H, rx: 4, fill: color(colors[i]) }, svg);
@@ -315,7 +361,18 @@
     document.querySelectorAll("[data-unless]").forEach((e) => { if (get(DATA, e.getAttribute("data-unless"))) e.remove(); });
   }
 
-  function render() { conditions(); dots(); clock(); badge(); bindTree(document); }
+  // Rail stripe = worst threshold state on the page (the alert badge is separate).
+  // Screens with no thresholded elements keep their static body[data-status].
+  function stripe() {
+    const rank = { ok: 1, warn: 2, crit: 3 };
+    let worst = 0;
+    document.querySelectorAll("body [data-status]").forEach((e) => {
+      if (!e.closest(".rail")) worst = Math.max(worst, rank[e.getAttribute("data-status")] || 0);
+    });
+    if (worst) document.body.setAttribute("data-status", ["", "ok", "warn", "crit"][worst]);
+  }
+
+  function render() { conditions(); dots(); clock(); badge(); bindTree(document); stripe(); }
   render();
   setInterval(clock, 1000);
 
