@@ -1,0 +1,188 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Rack display architecture</title>
+<style>
+@font-face { font-family: "RD Sans"; src: url("../../design/fonts/Roboto-Regular.ttf"); font-weight: 400; }
+@font-face { font-family: "RD Sans"; src: url("../../design/fonts/Roboto-Medium.ttf"); font-weight: 500; }
+@font-face { font-family: "RD Sans"; src: url("../../design/fonts/Roboto-Bold.ttf"); font-weight: 700; }
+@font-face { font-family: "RD Cond"; src: url("../../design/fonts/RobotoCondensed-Regular.ttf"); font-weight: 400; }
+@font-face { font-family: "RD Cond"; src: url("../../design/fonts/RobotoCondensed-Medium.ttf"); font-weight: 500; }
+@font-face { font-family: "RD Cond"; src: url("../../design/fonts/RobotoCondensed-Bold.ttf"); font-weight: 700; }
+:root {
+  --bg:#080C10; --rail:#101418; --surface:#181C20; --surface-2:#202830; --line:#283038; --line-2:#384450;
+  --ink:#FFFFFF; --ink-2:#B0B8C0; --ink-3:#788490;
+  --c-1:#3888E8; --c-2:#E06028; --c-3:#20A878; --c-4:#8880E0; --ok:#10A810; --warn:#F8B018;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1600px; height: 1060px; background: var(--bg); color: var(--ink); font-family: "RD Sans"; overflow: hidden; }
+.abs { position: absolute; }
+.eyebrow { font: 500 15px "RD Cond"; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.card { position: absolute; background: var(--surface); border-radius: 12px; padding: 18px 22px; }
+.card h3 { font: 700 26px "RD Cond"; letter-spacing: .01em; }
+.card .sub { font: 400 16px "RD Sans"; color: var(--ink-2); margin-top: 4px; line-height: 1.35; }
+.accent { position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px; border-radius: 0 3px 3px 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { font: 500 13px "RD Cond"; letter-spacing: .04em; color: var(--ink-2); background: var(--surface-2); border-radius: 5px; padding: 4px 8px; }
+.chip b { color: var(--ink); font-weight: 700; }
+.src { display: grid; grid-template-columns: 12px 1fr; column-gap: 10px; align-items: baseline; padding: 14px 0; border-top: 1px solid var(--line); }
+.src:first-of-type { border-top: 0; }
+.src i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; transform: translateY(1px); }
+.src .n { font: 700 18px "RD Cond"; }
+.src .d { grid-column: 2; font: 400 14px "RD Sans"; color: var(--ink-3); margin-top: 2px; }
+.pod { position: absolute; border: 2px dashed var(--line-2); border-radius: 16px; }
+.lbl { position: absolute; font: 700 14px "RD Cond"; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); background: var(--bg); padding: 0 6px; }
+.thumb { display: block; width: 100%; border-radius: 4px; }
+.bezel { background: #000; border: 6px solid #2a2e33; border-radius: 6px; padding: 0; margin-top: 14px; }
+.browser { border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; margin-top: 14px; }
+.browser .bar { height: 26px; background: var(--surface-2); display: flex; align-items: center; gap: 6px; padding: 0 10px; }
+.browser .bar span { width: 9px; height: 9px; border-radius: 50%; background: var(--line-2); }
+.browser .bar em { font: 400 12px "RD Sans"; font-style: normal; color: var(--ink-3); margin-left: 8px; background: var(--bg); border-radius: 4px; padding: 2px 10px; }
+.browser .page { background: #0e1216; padding: 14px 10px; }
+.step { position: absolute; display: flex; align-items: center; gap: 10px; }
+.pill { background: var(--surface); border-radius: 10px; padding: 10px 14px; }
+.pill .t { font: 700 17px "RD Cond"; }
+.pill .s { font: 400 13px "RD Sans"; color: var(--ink-3); margin-top: 2px; }
+.num { position: absolute; width: 28px; height: 28px; border-radius: 50%; font: 700 15px "RD Cond"; display: grid; place-items: center; color: var(--bg); }
+svg { position: absolute; left: 0; top: 0; }
+.alabel { font: 500 13px "RD Cond"; letter-spacing: .08em; fill: var(--ink-3); text-transform: uppercase; }
+</style></head>
+<body>
+
+<!-- Header -->
+<div class="abs" style="left:40px; top:34px">
+  <div class="eyebrow">Knightware homelab · github.com/dsmithson/homelab-rack-display</div>
+  <div style="font: 700 44px 'RD Cond'; margin-top: 6px">How the rack display works</div>
+</div>
+<div class="abs" style="right:40px; top:44px; text-align:right">
+  <div style="font: 400 17px 'RD Sans'; color: var(--ink-2); line-height:1.4">One page, two audiences: a browser on the LAN<br>and a 1440×240 DisplayLink panel in the rack.</div>
+</div>
+
+<!-- Arrows -->
+<svg width="1600" height="1060" viewBox="0 0 1600 1060">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#788490"/></marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3888E8"/></marker>
+  </defs>
+  <g fill="none" stroke="#788490" stroke-width="2">
+    <!-- Prometheus -> collector -->
+    <path d="M410 250 H498" marker-end="url(#a)"/>
+    <!-- Grafana -> collector -->
+    <path d="M410 760 H448 V286 H498" marker-end="url(#a)"/>
+    <!-- collector -> server -->
+    <path d="M800 320 V362" marker-end="url(#a)"/>
+    <!-- server -> chromium -->
+    <path d="M800 482 V524" marker-end="url(#a)"/>
+    <!-- chromium -> drm -->
+    <path d="M800 644 V686" marker-end="url(#a)"/>
+    <!-- drm -> udl -->
+    <path d="M800 786 V852" marker-end="url(#a)"/>
+  </g>
+  <g fill="none" stroke="#3888E8" stroke-width="2.5">
+    <!-- server -> browser -->
+    <path d="M1102 422 H1188" marker-end="url(#ab)"/>
+    <!-- udl -> panel -->
+    <path d="M1102 890 H1188" marker-end="url(#ab)"/>
+  </g>
+  <text class="alabel" x="420" y="240">PromQL</text>
+  <text class="alabel" x="0" y="0" transform="translate(462 560) rotate(-90)">alerts</text>
+  <text class="alabel" x="812" y="347">JSON data document</text>
+  <text class="alabel" x="812" y="509">rotation page</text>
+  <text class="alabel" x="812" y="671">changed frames, 1 fps</text>
+  <text class="alabel" x="812" y="826">dumb buffer + DIRTYFB</text>
+  <text class="alabel" x="1138" y="410">HTTPS</text>
+  <text class="alabel" x="1142" y="878">USB</text>
+</svg>
+
+<!-- Column A: sources -->
+<div class="lbl" style="left:34px; top:118px">Data sources</div>
+<div class="card" style="left:40px; top:140px; width:370px; height:560px">
+  <div class="accent" style="background: var(--c-2)"></div>
+  <h3>Prometheus</h3>
+  <div class="sub">kube-prometheus-stack, already scraping everything</div>
+  <div style="margin-top:12px">
+    <div class="src"><i style="background:var(--c-1)"></i><div><div class="n">node-exporter · kube-state-metrics</div></div><div class="d">9 nodes: CPU, memory, SoC temps, pods, CronJobs</div></div>
+    <div class="src"><i style="background:var(--c-1)"></i><div class="n">OPNsense · blackbox · speedtest</div><div class="d">WAN bandwidth, ping + loss, hourly speed test</div></div>
+    <div class="src"><i style="background:var(--c-1)"></i><div class="n">SNMP</div><div class="d">APC Smart-UPS, Synology NAS, TP-Link switch</div></div>
+    <div class="src"><i style="background:var(--c-3)"></i><div class="n">Technitium DNS</div><div class="d">queries, cache hits, ad blocks</div></div>
+    <div class="src"><i style="background:var(--c-4)"></i><div class="n">Jellyfin exporter</div><div class="d">now playing, transcodes, library counts</div></div>
+    <div class="src"><i style="background:var(--c-2)"></i><div class="n">LiteLLM proxy</div><div class="d">tokens, top models, local vs. Claude</div></div>
+  </div>
+</div>
+<div class="card" style="left:40px; top:722px; width:370px; height:150px">
+  <div class="accent" style="background: var(--warn)"></div>
+  <h3>Grafana</h3>
+  <div class="sub">41 alert rules managed in Terraform.<br>Firing alerts via the API with a<br>read-only service-account token.</div>
+</div>
+
+<!-- Column B: the pod -->
+<div class="pod" style="left:470px; top:140px; width:660px; height:670px"></div>
+<div class="lbl" style="left:490px; top:130px">rack-display pod · Go · privileged · pinned to turing01-04</div>
+
+<div class="card" style="left:500px; top:178px; width:600px; height:142px">
+  <div class="accent" style="background: var(--c-1)"></div>
+  <h3>Collector</h3>
+  <div class="sub">Evaluates every binding every 15 seconds into one JSON document.</div>
+  <div class="chips"><span class="chip"><b>config/display.json</b></span><span class="chip">PromQL bindings</span><span class="chip">thresholds</span><span class="chip">rotation + variants</span></div>
+</div>
+<div class="card" style="left:500px; top:362px; width:600px; height:120px">
+  <div class="accent" style="background: var(--c-1)"></div>
+  <h3>Web server</h3>
+  <div class="sub">Injects the data into each HTML/CSS/SVG screen; display.js binds it.</div>
+  <div class="chips"><span class="chip"><b>/</b> rotation</span><span class="chip"><b>/screens/*</b></span><span class="chip"><b>/api/data</b></span><span class="chip"><b>/frame.png</b></span></div>
+</div>
+<div class="card" style="left:500px; top:524px; width:600px; height:120px">
+  <div class="accent" style="background: var(--c-4)"></div>
+  <h3>Headless Chromium <span style="font-weight:400; color:var(--ink-3)">(chromedp)</span></h3>
+  <div class="sub">Opens the same page a browser sees and screenshots it once a second.</div>
+  <div class="chips"><span class="chip">recycled every 6 h to cap memory</span><span class="chip">tini reaps the orphans</span></div>
+</div>
+<div class="card" style="left:500px; top:686px; width:600px; height:100px">
+  <div class="accent" style="background: var(--c-3)"></div>
+  <h3>DRM/KMS output</h3>
+  <div class="sub">Straight to the kernel, no X or Wayland. 1440×480 buffer (udl's minimum), only the top 240 rows flushed.</div>
+</div>
+
+<!-- Kernel strip -->
+<div class="card" style="left:470px; top:852px; width:660px; height:76px; background: var(--rail); border: 1px solid var(--line)">
+  <div style="display:flex; align-items:baseline; gap:14px">
+    <h3 style="font-size:22px">udl.ko</h3>
+    <div class="sub" style="margin:0">turing01-04 kernel · built out of tree from kernel.org 6.1 sources · DKMS</div>
+  </div>
+  <div class="sub" style="margin-top:4px; color:var(--ink-3); font-size:14px">DisplayLink's own evdi driver can't drive this older DL-1x5 chip; the in-kernel udl driver can.</div>
+</div>
+
+<!-- Column C: outputs -->
+<div class="lbl" style="left:1184px; top:118px">Where you see it</div>
+<div class="card" style="left:1190px; top:140px; width:370px; height:470px">
+  <div class="accent" style="background: var(--c-1)"></div>
+  <h3>Any browser on the LAN</h3>
+  <div class="sub">rackdisplay.int.knightware.net<br>Internal ingress only, scales to fit any window.</div>
+  <div class="browser">
+    <div class="bar"><span></span><span></span><span></span><em>rackdisplay.int.knightware.net</em></div>
+    <div class="page"><img class="thumb" src="./01-internet.png"></div>
+  </div>
+  <div class="sub" style="margin-top:14px; color:var(--ink-3); font-size:14px">Same page, same data, so the web view and the panel always match. /frame.png shows exactly what the panel shows.</div>
+</div>
+<div class="card" style="left:1190px; top:640px; width:370px; height:288px">
+  <div class="accent" style="background: var(--ok)"></div>
+  <h3>The rack panel</h3>
+  <div class="sub">UV01DA DisplayLink · 1440×240 · USB<br>Turing Pi 2 board · RK1 node 4</div>
+  <div class="bezel"><img class="thumb" style="border-radius:0" src="./00-overview.png"></div>
+  <div class="sub" style="margin-top:12px; color:var(--ink-3); font-size:14px">A rescued prototype front panel, still in its 1RU chassis.</div>
+</div>
+
+<!-- Delivery strip -->
+<div class="lbl" style="left:34px; top:952px">Delivery</div>
+<div class="step" style="left:40px; top:976px">
+  <div class="pill"><div class="t">GitHub</div><div class="s">push a vX.Y.Z tag</div></div>
+  <svg style="position:static" width="34" height="14"><path d="M2 7 H28" stroke="#788490" stroke-width="2" marker-end="url(#a)"/></svg>
+  <div class="pill"><div class="t">GitHub Actions</div><div class="s">arm64 + amd64 image</div></div>
+  <svg style="position:static" width="34" height="14"><path d="M2 7 H28" stroke="#788490" stroke-width="2" marker-end="url(#a)"/></svg>
+  <div class="pill"><div class="t">Docker Hub</div><div class="s">dsmithson/rack-display</div></div>
+  <svg style="position:static" width="34" height="14"><path d="M2 7 H28" stroke="#788490" stroke-width="2" marker-end="url(#a)"/></svg>
+  <div class="pill"><div class="t">homelab-helm-charts</div><div class="s">bump the pinned tag</div></div>
+  <svg style="position:static" width="34" height="14"><path d="M2 7 H28" stroke="#788490" stroke-width="2" marker-end="url(#a)"/></svg>
+  <div class="pill"><div class="t">ArgoCD</div><div class="s">syncs the pod</div></div>
+</div>
+
+</body></html>

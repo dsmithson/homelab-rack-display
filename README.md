@@ -4,6 +4,25 @@ Infographic status screens for the homelab, shown on a 1440x240 USB
 DisplayLink bar panel in the rack (on `turing01-04`) and served as a web page at
 `rackdisplay.int.knightware.net`.
 
+![The screen rotation, captured live](docs/images/rotation.gif)
+
+## Screens
+
+Nine screens rotate (plus variants that swap in for idle media and firing
+alerts). A few of them, captured live:
+
+![Overview](docs/images/00-overview.png)
+![Internet](docs/images/01-internet.png)
+![Cluster](docs/images/02-cluster.png)
+![Power and storage](docs/images/04-power-storage.png)
+![Alerts firing (design mock data)](docs/images/06b-alerts-firing.png)
+
+`design/renders/` has every screen rendered with its built-in mock data.
+
+## How it works
+
+![Architecture](docs/images/architecture.png)
+
 ```
 Prometheus ─┐                ┌─> GET /                 rotating display (browser, scales to fit)
             ├─> collector ──>│   GET /screens/<name>     one screen, live data injected (?live=15 to self-refresh)
@@ -28,7 +47,7 @@ the same rotation page a browser sees, so the web view and the panel always matc
 | `internal/collector` | Evaluates bindings into the data document |
 | `chart/` | Helm chart (ArgoCD consumes it from this repo) |
 | `deploy/udl-dkms/` | DKMS config for the panel's `udl` kernel module |
-| `docs/` | Data-source survey, panel driver setup |
+| `docs/` | Data-source survey, panel driver setup, README images (`docs/images/architecture.html` is the diagram source) |
 
 ## Configuration (`config/display.json`)
 
