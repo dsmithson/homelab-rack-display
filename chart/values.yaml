@@ -16,6 +16,9 @@ panel:
   # Node the panel is plugged into.
   node: turing01-04
   captureInterval: 1s
+  # Restart the headless Chromium this often. Its renderer grows ~150 MB/day
+  # and never shrinks; recycling keeps the pod near its baseline (~500 MB).
+  browserRecycle: 6h
 
 grafana:
   # Secret holding a Grafana service-account token (Viewer) for alert state.

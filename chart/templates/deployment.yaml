@@ -34,6 +34,7 @@ spec:
             - -panel=none
             {{- end }}
             - -interval={{ .Values.panel.captureInterval }}
+            - -browser-recycle={{ .Values.panel.browserRecycle }}
           env:
             - name: TZ
               value: {{ .Values.timezone | quote }}

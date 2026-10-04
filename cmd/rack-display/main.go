@@ -37,17 +37,18 @@ func main() {
 	panelOut := flag.String("panel", "", `"" = off, "auto" = find udl/evdi card, "none" = capture without output, or /dev/dri/cardN | /dev/fbN`)
 	chrome := flag.String("chrome", os.Getenv("CHROME_PATH"), "Chromium binary for the panel renderer")
 	interval := flag.Duration("interval", time.Second, "panel capture interval")
+	recycle := flag.Duration("browser-recycle", 6*time.Hour, "restart the panel's Chromium this often to cap its memory growth (0 = never)")
 	promURL := flag.String("prometheus", "", "override prometheus.url from config")
 	flag.Parse()
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	if err := run(log, *cfgPath, *listen, *webDir, *panelOut, *chrome, *interval, *promURL); err != nil {
+	if err := run(log, *cfgPath, *listen, *webDir, *panelOut, *chrome, *interval, *recycle, *promURL); err != nil {
 		log.Error("fatal", "err", err)
 		os.Exit(1)
 	}
 }
 
-func run(log *slog.Logger, cfgPath, listen, webDir, panelOut, chrome string, interval time.Duration, promURL string) error {
+func run(log *slog.Logger, cfgPath, listen, webDir, panelOut, chrome string, interval, recycle time.Duration, promURL string) error {
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		return err
@@ -90,7 +91,7 @@ func run(log *slog.Logger, cfgPath, listen, webDir, panelOut, chrome string, int
 		port := listen[strings.LastIndex(listen, ":")+1:]
 		cap := &panel.Capturer{
 			URL:    "http://127.0.0.1:" + port + "/?panel",
-			Chrome: chrome, Width: 1440, Height: 240, Interval: interval,
+			Chrome: chrome, Width: 1440, Height: 240, Interval: interval, Recycle: recycle,
 			Log: log.With("component", "panel"),
 		}
 		srv.Frames = cap

@@ -5,6 +5,7 @@ package panel
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/draw"
@@ -33,7 +34,12 @@ type Capturer struct {
 	Width    int
 	Height   int
 	Interval time.Duration
-	Log      *slog.Logger
+	// Recycle restarts the browser after this long (0 = never). Chromium's
+	// renderer grows steadily under a 1 fps screenshot loop plus iframe
+	// rotation (~150 MB/day) and is never given back, so a long-lived
+	// session eventually hits the pod's memory limit.
+	Recycle time.Duration
+	Log     *slog.Logger
 
 	mu  sync.RWMutex
 	out Output // nil = capture only (e.g. for /frame.png)
@@ -57,12 +63,20 @@ func (c *Capturer) LatestPNG() ([]byte, time.Time) {
 	return c.png, c.at
 }
 
-// Run captures until ctx is done, restarting the browser if it fails.
+// errRecycle ends a session that reached Capturer.Recycle.
+var errRecycle = errors.New("recycle")
+
+// Run captures until ctx is done, restarting the browser if it fails or is
+// due for recycling. The panel keeps showing the last frame meanwhile.
 func (c *Capturer) Run(ctx context.Context) {
 	for {
 		err := c.session(ctx)
 		if ctx.Err() != nil {
 			return
+		}
+		if errors.Is(err, errRecycle) {
+			c.Log.Info("recycling browser", "after", c.Recycle)
+			continue
 		}
 		c.Log.Error("browser session ended; restarting", "err", err)
 		select {
@@ -112,10 +126,18 @@ func (c *Capturer) session(ctx context.Context) error {
 	var lastErr time.Time
 	t := time.NewTicker(c.Interval)
 	defer t.Stop()
+	var recycle <-chan time.Time
+	if c.Recycle > 0 {
+		rt := time.NewTimer(c.Recycle)
+		defer rt.Stop()
+		recycle = rt.C
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-recycle:
+			return errRecycle
 		case <-t.C:
 		}
 		var buf []byte
