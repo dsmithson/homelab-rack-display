@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# promq: quick Prometheus queries for designing and checking bindings.
+#
+#   promq '<expr>'                    instant query, one line per series
+#   promq -r 24h [-s 1h] '<expr>'     range query (step defaults to range/24)
+#   promq -m <substr>                 list metric names containing substr
+#
+# PROM_URL defaults to http://localhost:19090 (the port-forward in CLAUDE.md).
+set -euo pipefail
+
+PROM_URL="${PROM_URL:-http://localhost:19090}"
+range="" step="" match=""
+
+usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+
+while getopts "r:s:m:h" o; do
+  case "$o" in
+    r) range="$OPTARG" ;;
+    s) step="$OPTARG" ;;
+    m) match="$OPTARG" ;;
+    h) usage 0 ;;
+    *) usage 2 ;;
+  esac
+done
+shift $((OPTIND - 1))
+
+if ! curl -sf --max-time 3 -o /dev/null "$PROM_URL/-/ready"; then
+  echo "promq: Prometheus not reachable at $PROM_URL" >&2
+  echo "  kubectl -n monitoring port-forward svc/kube-prometheus-stack-prometheus 19090:9090 &" >&2
+  exit 1
+fi
+
+# seconds <duration>: 90s, 15m, 24h, 7d, 1w -> seconds
+seconds() {
+  local n="${1%[smhdw]}" u="${1: -1}"
+  case "$u" in
+    s) echo "$n" ;; m) echo $((n * 60)) ;; h) echo $((n * 3600)) ;;
+    d) echo $((n * 86400)) ;; w) echo $((n * 604800)) ;; *) echo "$1" ;;
+  esac
+}
+
+if [[ -n "$match" ]]; then
+  curl -sf "$PROM_URL/api/v1/label/__name__/values" |
+    python3 -c 'import json,sys; m=sys.argv[1].lower(); [print(n) for n in json.load(sys.stdin)["data"] if m in n.lower()]' "$match"
+  exit 0
+fi
+
+[[ $# -eq 1 ]] || usage 2
+expr="$1"
+
+r="" s="" expect=""
+if [[ -n "$range" ]]; then
+  end=$(date +%s)
+  r=$(seconds "$range")
+  s=$(seconds "${step:-$((r / 24))s}")
+  expect=$((r / s + 1))
+fi
+
+if [[ -z "$range" ]]; then
+  curl -s --data-urlencode "query=$expr" "$PROM_URL/api/v1/query"
+else
+  curl -s --data-urlencode "query=$expr" --data-urlencode "start=$((end - r))" \
+    --data-urlencode "end=$end" --data-urlencode "step=$s" "$PROM_URL/api/v1/query_range"
+fi | EXPECT="$expect" python3 -c '
+import json, os, sys
+
+def num(v):
+    try:
+        f = float(v)
+    except ValueError:
+        return v
+    if f != f:
+        return "NaN"
+    if abs(f) >= 100 or f == int(f):
+        return str(round(f))
+    return f"{f:.3g}"
+
+def labels(m):
+    return "{" + ", ".join(f"{k}=\"{v}\"" for k, v in sorted(m.items())) + "}"
+
+r = json.load(sys.stdin)
+if r.get("status") != "success":
+    sys.exit("promq: " + r.get("errorType", "error") + ": " + r.get("error", "?"))
+d = r["data"]
+if d["resultType"] == "scalar":
+    print(num(d["result"][1]))
+elif not d["result"]:
+    print("(no series)")
+for x in d["result"] if d["resultType"] != "scalar" else []:
+    if "values" in x:
+        vals = [num(v[1]) for v in x["values"]]
+        exp = os.environ.get("EXPECT")
+        gap = f" of {exp}, empty steps omitted" if exp and int(exp) != len(vals) else ""
+        print(labels(x["metric"]), f"[{len(vals)} pts{gap}]", " ".join(vals))
+    else:
+        print(labels(x["metric"]), num(x["value"][1]))
+'

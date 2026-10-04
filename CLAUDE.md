@@ -29,8 +29,13 @@ kubectl -n monitoring port-forward svc/kube-prometheus-stack-prometheus 19090:90
 go run ./cmd/rack-display -prometheus http://localhost:19090 -web design -listen :18080
 ```
 
-There is no Chromium on the WSL dev box (the snap stub doesn't work). To
-exercise the panel renderer, build the image and run it with `-panel none`
+`scripts/promq` queries that port-forward (`-m` lists metrics, `-r 7d` shows a
+series). To add or change a screen, follow the `new-screen` skill
+(`.claude/skills/new-screen/SKILL.md`).
+
+The WSL dev box has no full Chromium (the snap stub doesn't work), but
+Playwright's `chrome-headless-shell` in `~/.cache/ms-playwright` renders screens
+and live screenshots (see `design/render.sh`). To exercise the panel renderer, build the image and run it with `-panel none`
 (`/frame.png` shows the captured frame). From inside Docker, reach a
 port-forward with `--address 0.0.0.0` and `http://host.docker.internal:19090`.
 
