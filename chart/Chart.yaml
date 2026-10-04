@@ -2,5 +2,5 @@ apiVersion: v2
 name: rack-display
 description: Homelab status screens for the 1440x240 rack panel, also served as a web page
 type: application
-version: 0.1.1
-appVersion: "1.0.1"
+version: 0.2.0
+appVersion: "1.1.0"
