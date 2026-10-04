@@ -72,6 +72,8 @@ Rollback = revert step 4.
   the page; the Go binary is ~20 MB.
 - **tini is PID 1** in the image so Chromium helpers orphaned by each recycle
   get reaped. Keep it if you change the entrypoint.
+- Chart `image.tag` defaults to `.Chart.AppVersion` (never `latest`), so
+  `appVersion` must match the tag you cut.
 - Chart `args` are appended to the image `ENTRYPOINT`; don't repeat
   `rack-display` in them.
 - Doc-only pushes (`*.md`, `docs/`, `deploy/`, `design/renders/`) skip the image

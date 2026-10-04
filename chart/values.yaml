@@ -1,8 +1,10 @@
 image:
   repository: dsmithson/rack-display
-  tag: "latest"
-  # latest is mutable, so always pull (same reasoning as azure-build-monitor).
-  pullPolicy: Always
+  # Empty = the chart's appVersion, so a chart pinned to tag vX.Y.Z runs
+  # image X.Y.Z. Release tags are immutable, so no need to re-pull. To try a
+  # dev build, set e.g. "sha-abc1234" and pullPolicy: Always.
+  tag: ""
+  pullPolicy: IfNotPresent
 
 # Timezone for the on-screen clock.
 timezone: America/Phoenix

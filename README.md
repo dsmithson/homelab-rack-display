@@ -110,6 +110,8 @@ Docker Hub `dsmithson/rack-display`:
   `targetRevision: main` would let a chart edit on `main` roll out on its own,
   possibly ahead of (or behind) the image it expects. Pinning the chart to the
   same `vX.Y.Z` tag as the image keeps the two in lockstep.
+  The chart's own default `image.tag` is empty, meaning its `appVersion`, so
+  even without the override a chart at `vX.Y.Z` runs image `X.Y.Z`.
 - **`main` still publishes `latest` and `sha-<short>`** as a dev channel for
   trying a build before cutting a release (e.g. temporarily point the values
   at `sha-abc1234`).
